@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>小小桥牌 Mini Bridge</title>
+<style>
+:root {
+  --bg: #1a1f2e;
+  --bg2: #232a3b;
+  --bg3: #2c3548;
+  --card-bg: #f5f0e8;
+  --card-shadow: rgba(0,0,0,0.3);
+  --green: #2d7a4f;
+  --green-felt: #1b5e3b;
+  --gold: #d4a843;
+  --red: #c0392b;
+  --blue: #2980b9;
+  --text: #e8e4dc;
+  --text-dim: #8a8b90;
+  --accent: #e8c547;
+  --suit-spade: #1a1a2e;
+  --suit-heart: #c0392b;
+  --suit-diamond: #d4760a;
+  --suit-club: #27ae60;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Lobby ── */
+#lobby {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+#lobby h1 {
+  font-size: 2.4em;
+  color: var(--gold);
+  margin-bottom: 8px;
+  letter-spacing: 4px;
+}
+#lobby .subtitle {
+  color: var(--text-dim);
+  margin-bottom: 40px;
+  font-size: 0.95em;
+}
+#lobby .form-group {
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#lobby label {
+  font-size: 0.85em;
+  color: var(--text-dim);
+}
+#lobby input, #lobby select {
+  padding: 10px 16px;
+  border: 1px solid var(--bg3);
+  border-radius: 6px;
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 1em;
+  width: 260px;
+  outline: none;
+}
+#lobby input:focus { border-color: var(--gold); }
+#lobby button {
+  margin-top: 12px;
+  padding: 12px 40px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.05em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#lobby button:hover { background: #35915d; }
+
+/* ── Game ── */
+#game { display:none; width:100vw; height:100vh; position:relative; }
+
+/* Table */
+.table-area {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, 80vw);
+  height: min(520px, 80vw);
+  background: radial-gradient(ellipse at center, #2a7a50 0%, var(--green-felt) 70%, #14442a 100%);
+  border-radius: 24px;
+  border: 6px solid #3a2a1a;
+  box-shadow: 0 0 60px rgba(0,0,0,0.5), inset 0 0 40px rgba(0,0,0,0.2);
+}
+
+/* Played cards on table */
+.trick-area {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 200px; height: 200px;
+}
+.trick-card {
+  position: absolute;
+  width: 52px; height: 72px;
+  background: var(--card-bg);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8em; font-weight: bold;
+  box-shadow: 1px 2px 6px var(--card-shadow);
+  transition: all 0.3s;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.trick-card.north { top: 0; left: 50%; transform: translateX(-50%); }
+.trick-card.south { bottom: 0; left: 50%; transform: translateX(-50%); }
+.trick-card.west { top: 50%; left: 0; transform: translateY(-50%); }
+.trick-card.east { top: 50%; right: 0; transform: translateY(-50%); }
+
+/* Player labels */
+.player-label {
+  position: absolute;
+  text-align: center;
+  font-size: 0.8em;
+  padding: 4px 12px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.5);
+  white-space: nowrap;
+}
+.player-label .name { color: var(--gold); font-weight: bold; }
+.player-label .tricks { color: var(--text-dim); font-size: 0.85em; }
+.player-label.active { box-shadow: 0 0 12px var(--accent); }
+.player-label.north { top: 6%; left: 50%; transform: translateX(-50%); }
+.player-label.south { bottom: 6%; left: 50%; transform: translateX(-50%); }
+.player-label.west { top: 50%; left: 6%; transform: translateY(-50%); }
+.player-label.east { top: 50%; right: 6%; transform: translateY(-50%); }
+
+/* Hand (cards) */
+.hand {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+}
+.hand.south { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.hand.north { top: 8px; left: 50%; transform: translateX(-50%); }
+.hand.west { top: 50%; left: 8px; transform: translateY(-50%) rotate(90deg); }
+.hand.east { top: 50%; right: 8px; transform: translateY(-50%) rotate(-90deg); }
+
+.card {
+  width: 48px; height: 68px;
+  background: var(--card-bg);
+  border-radius: 5px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  font-size: 0.75em; font-weight: bold;
+  cursor: default;
+  box-shadow: 1px 2px 4px var(--card-shadow);
+  transition: transform 0.15s, box-shadow 0.15s;
+  user-select: none;
+  line-height: 1.1;
+}
+.card.face-down {
+  background: linear-gradient(135deg, #3a5ba0, #2c4a85);
+  color: transparent;
+}
+.card.face-down::after {
+  content: '🂠';
+  font-size: 1.6em;
+  color: rgba(255,255,255,0.3);
+}
+.card.playable {
+  cursor: pointer;
+  border: 2px solid var(--accent);
+}
+.card.playable:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+.card .suit { font-size: 1.1em; }
+.card.suit-s, .card.suit-c { color: #1a1a2e; }
+.card.suit-h { color: var(--red); }
+.card.suit-d { color: var(--suit-diamond); }
+
+/* Bidding box */
+#bidding-box {
+  display: none;
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  border-radius: 10px;
+  padding: 12px;
+  z-index: 10;
+  max-width: 360px;
+}
+#bid-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.bid-btn {
+  padding: 6px 4px;
+  border: 1px solid var(--bg3);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.8em;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.bid-btn:hover:not(:disabled) { background: var(--green); }
+.bid-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.bid-btn.pass-btn { background: #555; }
+.bid-btn.dbl-btn { background: #8e3b3b; }
+.bid-btn.rdbl-btn { background: #2b5ea0; }
+#bid-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* Auction display */
+#auction-display {
+  display: none;
+  position: absolute;
+  top: 12%;
+  right: 12px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 0.75em;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 5;
+  min-width: 180px;
+}
+#auction-display table {
+  border-collapse: collapse;
+  width: 100%;
+}
+#auction-display th {
+  color: var(--gold);
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--bg3);
+}
+#auction-display td {
+  padding: 2px 8px;
+  text-align: center;
+}
+
+/* Info bar */
+#info-bar {
+  position: absolute;
+  top: 8px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  padding: 6px 20px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  color: var(--accent);
+  z-index: 5;
+  white-space: nowrap;
+}
+
+/* Contract display */
+#contract-display {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.4em;
+  color: var(--gold);
+  font-weight: bold;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Score popup */
+#score-popup {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+#score-popup.show { display: flex; }
+#score-popup .content {
+  background: var(--bg2);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 24px 32px;
+  text-align: center;
+  max-width: 400px;
+}
+#score-popup h2 { color: var(--gold); margin-bottom: 12px; }
+#score-popup .score-val { font-size: 2em; color: var(--accent); margin: 12px 0; }
+#score-popup button {
+  margin-top: 16px;
+  padding: 10px 30px;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
+/* History panel */
+#history-btn {
+  position: absolute;
+  top: 8px; right: 12px;
+  padding: 6px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8em;
+  z-index: 20;
+}
+#history-panel {
+  display: none;
+  position: fixed;
+  top: 0; right: 0;
+  width: min(400px, 90vw);
+  height: 100vh;
+  background: var(--bg);
+  border-left: 2px solid var(--bg3);
+  z-index: 50;
+  overflow-y: auto;
+  padding: 20px;
+}
+#history-panel.show { display: block; }
+#history-panel h2 {
+  color: var(--gold);
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#history-panel .close-btn {
+  cursor: pointer;
+  font-size: 1.4em;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+}
+.history-item {
+  background: var(--bg2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  font-size: 0.85em;
+}
+.history-item .board-num { color: var(--gold); font-weight: bold; }
+.history-item .contract { color: var(--accent); }
+.history-item .result { margin-top: 4px; }
+.history-item .hands-detail { margin-top: 6px; color: var(--text-dim); font-size: 0.9em; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .table-area { width: 92vw; height: 92vw; }
+  .card { width: 36px; height: 52px; font-size: 0.65em; }
+  .trick-card { width: 40px; height: 56px; font-size: 0.7em; }
+  #bidding-box { bottom: 70px; padding: 8px; max-width: 320px; }
+  .bid-btn { font-size: 0.7em; padding: 5px 2px; }
+  .player-label { font-size: 0.7em; }
+}
+
+/* Status bar at bottom */
+#status-bar {
+  position: absolute;
+  bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 12px;
+  z-index: 5;
+}
+#status-bar button {
+  padding: 6px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--bg3);
+  color: var(--text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8em;
+}
+#status-bar button:hover { background: var(--bg3); }
+
+.suit-symbol { font-weight: bold; }
+.suit-s { color: #1a1a2e; }
+.suit-h { color: var(--red); }
+.suit-d { color: var(--suit-diamond); }
+.suit-c { color: var(--suit-club); }
+/* in dark bg contexts */
+.dark-ctx .suit-s { color: #ccc; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LOBBY ═══ -->
+<div id="lobby">
+  <h1>♠ 小小桥牌 ♣</h1>
+  <div class="subtitle">28张牌 · P2P 在线对战</div>
+  <div class="form-group">
+    <label>你的昵称</label>
+    <input type="text" id="nickname" placeholder="输入昵称" maxlength="12">
+  </div>
+  <div class="form-group">
+    <label>房间号</label>
+    <input type="text" id="room-id" placeholder="输入房间号" maxlength="20">
+  </div>
+  <div class="form-group">
+    <label>选择座位</label>
+    <select id="seat-select">
+      <option value="">旁观</option>
+      <option value="N">北 (North)</option>
+      <option value="E">东 (East)</option>
+      <option value="S">南 (South)</option>
+      <option value="W">西 (West)</option>
+    </select>
+  </div>
+  <button onclick="joinGame()">加入房间</button>
+</div>
+
+<!-- ═══ GAME ═══ -->
+<div id="game">
+  <div id="info-bar">等待玩家加入...</div>
+  <button id="history-btn" onclick="toggleHistory()">📋 历史</button>
+
+  <div class="table-area">
+    <!-- Player labels -->
+    <div class="player-label north" id="label-N"><span class="name" id="name-N">北 (空位)</span><br><span class="tricks" id="tricks-N"></span></div>
+    <div class="player-label south" id="label-S"><span class="name" id="name-S">南 (空位)</span><br><span class="tricks" id="tricks-S"></span></div>
+    <div class="player-label west" id="label-W"><span class="name" id="name-W">西 (空位)</span><br><span class="tricks" id="tricks-W"></span></div>
+    <div class="player-label east" id="label-E"><span class="name" id="name-E">东 (空位)</span><br><span class="tricks" id="tricks-E"></span></div>
+
+    <!-- Trick area -->
+    <div class="trick-area" id="trick-area"></div>
+
+    <!-- Contract display -->
+    <div id="contract-display"></div>
+  </div>
+
+  <!-- Hands -->
+  <div class="hand north" id="hand-N"></div>
+  <div class="hand south" id="hand-S"></div>
+  <div class="hand west" id="hand-W"></div>
+  <div class="hand east" id="hand-E"></div>
+
+  <!-- Bidding box -->
+  <div id="bidding-box">
+    <div id="bid-grid"></div>
+    <div id="bid-actions">
+      <button class="bid-btn pass-btn" onclick="makeBid('Pass')">Pass</button>
+      <button class="bid-btn dbl-btn" id="dbl-btn" onclick="makeBid('X')" disabled>X</button>
+      <button class="bid-btn rdbl-btn" id="rdbl-btn" onclick="makeBid('XX')" disabled>XX</button>
+    </div>
+  </div>
+
+  <!-- Auction display -->
+  <div id="auction-display" class="dark-ctx"></div>
+
+  <!-- Score popup -->
+  <div id="score-popup">
+    <div class="content">
+      <h2 id="score-title">本局结果</h2>
+      <div id="score-detail"></div>
+      <div class="score-val" id="score-val"></div>
+      <button onclick="closeScore()">下一局</button>
+    </div>
+  </div>
+
+  <!-- History panel -->
+  <div id="history-panel">
+    <h2>历史记录 <button class="close-btn" onclick="toggleHistory()">×</button></h2>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<!-- Trystero via CDN -->
+<script type="module">
+import { joinRoom } from 'https://esm.sh/trystero/nostr';
+
+// ══════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════
+const SUITS = ['C','D','H','S'];
+const SUIT_SYMBOLS = { S:'♠', H:'♥', D:'♦', C:'♣' };
+const SUIT_NAMES = { S:'黑桃', H:'红心', D:'方块', C:'梅花' };
+const RANKS = ['8','9','10','J','Q','K','A'];
+const SEATS = ['N','E','S','W'];
+const SEAT_NAMES = { N:'北', E:'东', S:'南', W:'西' };
+const BID_SUITS = ['C','D','H','S','NT'];
+const LEVELS = [1,2,3,4];
+// Tricks needed: level 1=4, 2=5, 3=6, 4=7
+const TRICKS_NEEDED = { 1:4, 2:5, 3:6, 4:7 };
+
+// ══════════════════════════════════════════════
+// GAME STATE
+// ══════════════════════════════════════════════
+let myPeerId = null;
+let mySeat = null; // null = spectator
+let myName = '';
+let room = null;
+
+// Actions (set by trystero)
+let sendState, getState;
+let sendAction, getAction;
+
+let state = {
+  phase: 'waiting', // waiting, bidding, playing, scoring
+  dealer: 0, // index into SEATS
+  hands: { N:[], E:[], S:[], W:[] },
+  players: { N:null, E:null, S:null, W:null }, // { peerId, name }
+  auction: [], // [{seat, bid}]
+  contract: null, // { level, suit, doubled, redoubled, declarer }
+  currentTrick: [], // [{seat, card}]
+  trickWins: { NS:0, EW:0 },
+  trickLead: null, // seat who leads
+  turnSeat: null,
+  dummy: null,
+  boardNum: 0,
+  history: [],
+  allHands: null, // saved for history
+};
+
+// Peer tracking
+let peers = {}; // peerId -> { seat, name }
+let isHost = false;
+
+// ══════════════════════════════════════════════
+// TRYSTERO SETUP
+// ══════════════════════════════════════════════
+window.joinGame = function() {
+  myName = document.getElementById('nickname').value.trim() || '玩家';
+  const roomId = document.getElementById('room-id').value.trim();
+  mySeat = document.getElementById('seat-select').value || null;
+
+  if (!roomId) { alert('请输入房间号'); return; }
+
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('game').style.display = 'block';
+
+  room = joinRoom({ appId: 'minibridge-2026' }, roomId);
+
+  [sendState, getState] = room.makeAction('state');
+  [sendAction, getAction] = room.makeAction('action');
+
+  myPeerId = room.selfId || Math.random().toString(36).slice(2);
+
+  // When a new peer joins
+  room.onPeerJoin(peerId => {
+    console.log('Peer joined:', peerId);
+    // Send our info to them
+    sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
+    // If host, send full state
+    if (isHost) {
+      setTimeout(() => sendState(state, peerId), 500);
+    }
+  });
+
+  room.onPeerLeave(peerId => {
+    console.log('Peer left:', peerId);
+    // Remove from players
+    for (let s of SEATS) {
+      if (state.players[s] && state.players[s].peerId === peerId) {
+        state.players[s] = null;
+        updatePlayerLabels();
+      }
+    }
+    delete peers[peerId];
+  });
+
+  // Receive actions
+  getAction((data, peerId) => {
+    handleAction(data, peerId);
+  });
+
+  // Receive state (from host)
+  getState((data, peerId) => {
+    if (peerId !== myPeerId) {
+      state = data;
+      renderAll();
+    }
+  });
+
+  // Register self
+  if (mySeat) {
+    state.players[mySeat] = { peerId: myPeerId, name: myName };
+  }
+  peers[myPeerId] = { seat: mySeat, name: myName };
+
+  // First person is host
+  isHost = true;
+  room.onPeerJoin(() => {}); // just to trigger
+
+  updatePlayerLabels();
+  updateInfoBar();
+  buildBidGrid();
+
+  // Load history from localStorage
+  const saved = localStorage.getItem('minibridge-history');
+  if (saved) {
+    try { state.history = JSON.parse(saved); } catch(e) {}
+  }
+};
+
+function handleAction(data, peerId) {
+  if (data.type === 'hello') {
+    peers[peerId] = { seat: data.seat, name: data.name };
+    if (data.seat && !state.players[data.seat]) {
+      state.players[data.seat] = { peerId: data.peerId || peerId, name: data.name };
+      updatePlayerLabels();
+      checkReady();
+      if (isHost) broadcastState();
+    } else if (data.seat && state.players[data.seat]) {
+      // Seat taken - notify
+      sendAction({ type:'seat_taken', seat: data.seat }, peerId);
+    }
+  }
+  else if (data.type === 'bid') {
+    if (state.phase === 'bidding' && data.seat === state.turnSeat) {
+      processBid(data.seat, data.bid);
+    }
+  }
+  else if (data.type === 'play_card') {
+    if (state.phase === 'playing' && data.seat === state.turnSeat) {
+      processPlayCard(data.seat, data.card);
+    }
+  }
+  else if (data.type === 'request_deal') {
+    if (isHost) startNewBoard();
+  }
+  else if (data.type === 'seat_taken') {
+    alert(`座位 ${SEAT_NAMES[data.seat]} 已被占用！你将以旁观者身份加入。`);
+    mySeat = null;
+  }
+}
+
+function broadcastState() {
+  sendState(state);
+}
+
+// ══════════════════════════════════════════════
+// GAME LOGIC
+// ══════════════════════════════════════════════
+function checkReady() {
+  const seated = SEATS.filter(s => state.players[s]);
+  if (seated.length === 4 && state.phase === 'waiting') {
+    startNewBoard();
+  }
+}
+
+function startNewBoard() {
+  state.boardNum++;
+  state.dealer = (state.dealer + (state.boardNum > 1 ? 1 : 0)) % 4;
+  state.phase = 'bidding';
+  state.auction = [];
+  state.contract = null;
+  state.currentTrick = [];
+  state.trickWins = { NS:0, EW:0 };
+  state.trickLead = null;
+  state.dummy = null;
+  state.turnSeat = SEATS[state.dealer];
+
+  // Deal 28 cards
+  const deck = [];
+  for (let s of SUITS) {
+    for (let r of RANKS) {
+      deck.push({ suit: s, rank: r });
+    }
+  }
+  shuffle(deck);
+  state.hands = { N: deck.slice(0,7), E: deck.slice(7,14), S: deck.slice(14,21), W: deck.slice(21,28) };
+
+  // Sort hands
+  for (let s of SEATS) {
+    state.hands[s].sort((a,b) => {
+      const si = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+      if (si !== 0) return si;
+      return RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank);
+    });
+  }
+
+  state.allHands = JSON.parse(JSON.stringify(state.hands));
+
+  renderAll();
+  broadcastState();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+// ── Bidding ──
+function getLastContractBid() {
+  for (let i = state.auction.length - 1; i >= 0; i--) {
+    const b = state.auction[i].bid;
+    if (b !== 'Pass' && b !== 'X' && b !== 'XX') return { ...state.auction[i], index: i };
+  }
+  return null;
+}
+
+function bidToValue(bid) {
+  if (bid === 'Pass' || bid === 'X' || bid === 'XX') return -1;
+  const level = parseInt(bid[0]);
+  const suit = bid.slice(1);
+  return level * 10 + BID_SUITS.indexOf(suit);
+}
+
+function isValidBid(seat, bid) {
+  if (bid === 'Pass') return true;
+
+  const lastContract = getLastContractBid();
+
+  if (bid === 'X') {
+    if (!lastContract) return false;
+    // Can only double opponent's bid
+    const lastBidder = lastContract.seat;
+    const sameTeam = (SEATS.indexOf(seat) % 2) === (SEATS.indexOf(lastBidder) % 2);
+    if (sameTeam) return false;
+    // Check no X or XX after the last contract bid
+    for (let i = lastContract.index + 1; i < state.auction.length; i++) {
+      if (state.auction[i].bid === 'X' || state.auction[i].bid === 'XX') return false;
+    }
+    // Check only passes between last contract and now
+    let onlyPasses = true;
+    for (let i = lastContract.index + 1; i < state.auction.length; i++) {
+      if (state.auction[i].bid !== 'Pass') { onlyPasses = false; break; }
+    }
+    return onlyPasses;
+  }
+
+  if (bid === 'XX') {
+    // Must have a X from opponent after last contract
+    let lastX = -1;
+    for (let i = state.auction.length - 1; i >= 0; i--) {
+      if (state.auction[i].bid === 'X') { lastX = i; break; }
+      if (state.auction[i].bid !== 'Pass') break;
+    }
+    if (lastX === -1) return false;
+    const xSeat = state.auction[lastX].seat;
+    const sameTeam = (SEATS.indexOf(seat) % 2) === (SEATS.indexOf(xSeat) % 2);
+    return !sameTeam; // can only redouble opponent's double
+  }
+
+  // Normal bid - must be higher than last contract
+  if (lastContract) {
+    return bidToValue(bid) > bidToValue(lastContract.bid);
+  }
+  return true;
+}
+
+function processBid(seat, bid) {
+  state.auction.push({ seat, bid });
+
+  // Check if auction ends (3 passes after a contract bid, or 4 passes from start)
+  const a = state.auction;
+  let passedOut = false;
+
+  if (a.length >= 4) {
+    const last3 = a.slice(-3);
+    if (last3.every(x => x.bid === 'Pass') && a.length > 3) {
+      // 3 passes after at least one non-pass bid
+      const hasContract = a.some(x => x.bid !== 'Pass' && x.bid !== 'X' && x.bid !== 'XX');
+      if (hasContract) {
+        finalizeAuction();
+        return;
+      }
+    }
+    if (a.length >= 4 && a.slice(-4).every(x => x.bid === 'Pass')) {
+      // All 4 passed
+      passedOut = true;
+    }
+  }
+
+  if (passedOut) {
+    state.phase = 'scoring';
+    state.contract = null;
+    // Record passed-out board
+    recordBoard(0, null);
+    renderAll();
+    broadcastState();
+    showScore('全Pass', '本局流局', 0);
+    return;
+  }
+
+  // Next turn
+  const idx = SEATS.indexOf(seat);
+  state.turnSeat = SEATS[(idx + 1) % 4];
+
+  renderAll();
+  broadcastState();
+}
+
+function finalizeAuction() {
+  const lastContract = getLastContractBid();
+  const bid = lastContract.bid;
+  const level = parseInt(bid[0]);
+  const suit = bid.slice(1);
+
+  // Find declarer: first person of the declaring side to bid this suit
+  const declarerSide = SEATS.indexOf(lastContract.seat) % 2; // 0=NS, 1=EW
+  let declarer = null;
+  for (let a of state.auction) {
+    if (a.bid !== 'Pass' && a.bid !== 'X' && a.bid !== 'XX') {
+      const s = a.bid.slice(1);
+      if (s === suit && SEATS.indexOf(a.seat) % 2 === declarerSide) {
+        declarer = a.seat;
+        break;
+      }
+    }
+  }
+
+  // Check doubled/redoubled
+  let doubled = false, redoubled = false;
+  for (let i = state.auction.length - 1; i >= 0; i--) {
+    if (state.auction[i].bid === 'XX') { redoubled = true; break; }
+    if (state.auction[i].bid === 'X') { doubled = true; break; }
+    if (state.auction[i].bid !== 'Pass') break;
+  }
+
+  state.contract = { level, suit, doubled, redoubled, declarer };
+
+  // Dummy is declarer's partner
+  const di = SEATS.indexOf(declarer);
+  state.dummy = SEATS[(di + 2) % 4];
+
+  // Lead is left of declarer
+  state.trickLead = SEATS[(di + 1) % 4];
+  state.turnSeat = state.trickLead;
+  state.phase = 'playing';
+  state.currentTrick = [];
+
+  renderAll();
+  broadcastState();
+}
+
+// ── Card Play ──
+function processPlayCard(seat, card) {
+  // Remove from hand
+  const hand = state.hands[seat];
+  const idx = hand.findIndex(c => c.suit === card.suit && c.rank === card.rank);
+  if (idx === -1) return;
+  hand.splice(idx, 1);
+
+  state.currentTrick.push({ seat, card });
+
+  if (state.currentTrick.length === 4) {
+    // Determine winner
+    const winner = determineTrickWinner(state.currentTrick, state.contract.suit);
+    const winnerSide = (SEATS.indexOf(winner) % 2 === 0) ? 'NS' : 'EW';
+    state.trickWins[winnerSide]++;
+
+    // Small delay then clear trick
+    renderAll();
+    broadcastState();
+
+    setTimeout(() => {
+      state.currentTrick = [];
+      state.trickLead = winner;
+      state.turnSeat = winner;
+
+      // Check if hand is over (all 7 tricks played)
+      if (state.trickWins.NS + state.trickWins.EW === 7) {
+        endPlay();
+      } else {
+        renderAll();
+        broadcastState();
+      }
+    }, 1200);
+    return;
+  }
+
+  // Next player
+  const si = SEATS.indexOf(seat);
+  state.turnSeat = SEATS[(si + 1) % 4];
+  renderAll();
+  broadcastState();
+}
+
+function determineTrickWinner(trick, trumpSuit) {
+  const leadSuit = trick[0].card.suit;
+  let best = trick[0];
+
+  for (let i = 1; i < trick.length; i++) {
+    const c = trick[i];
+    if (trumpSuit !== 'NT') {
+      // Trump suit comparison
+      if (c.card.suit === trumpSuit && best.card.suit !== trumpSuit) {
+        best = c;
+      } else if (c.card.suit === trumpSuit && best.card.suit === trumpSuit) {
+        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
+      } else if (c.card.suit === leadSuit && best.card.suit === leadSuit) {
+        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
+      }
+      // else: not trump, not lead suit -> can't win
+    } else {
+      // NT: only lead suit matters
+      if (c.card.suit === leadSuit && best.card.suit === leadSuit) {
+        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
+      }
+      // If best is not lead suit (shouldn't happen unless first card isn't lead?)
+    }
+  }
+  return best.seat;
+}
+
+function endPlay() {
+  state.phase = 'scoring';
+  const c = state.contract;
+  const declarerSide = (SEATS.indexOf(c.declarer) % 2 === 0) ? 'NS' : 'EW';
+  const declarerTricks = state.trickWins[declarerSide];
+  const needed = TRICKS_NEEDED[c.level];
+  const made = declarerTricks - needed; // positive = overtricks, negative = undertricks
+
+  const score = calculateScore(c, made);
+
+  recordBoard(score, c, declarerTricks);
+  renderAll();
+  broadcastState();
+
+  const contractStr = formatContract(c);
+  const resultStr = made >= 0 ?
+    (made === 0 ? '恰好完成' : `超 ${made} 墩`) :
+    `宕 ${-made}`;
+
+  showScore(
+    contractStr,
+    `庄家: ${SEAT_NAMES[c.declarer]} | ${resultStr} | 赢墩: ${declarerTricks}/7`,
+    score
+  );
+}
+
+function calculateScore(contract, made) {
+  // made = tricks above/below needed
+  const { level, suit, doubled, redoubled } = contract;
+
+  if (made >= 0) {
+    // ── Made the contract ──
+    let trickPoints = 0;
+    if (suit === 'NT') {
+      trickPoints = 30 + (level - 1) * 20; // first trick 30, rest 20
+    } else {
+      trickPoints = level * 20;
+    }
+
+    let dblMul = 1;
+    if (doubled) dblMul = 2;
+    if (redoubled) dblMul = 4;
+    trickPoints *= dblMul;
+
+    // Is it game? (trickPoints >= 50)
+    const isGame = trickPoints >= 50;
+    // Is it slam? (level 4 = all 7 tricks)
+    const isSlam = level === 4;
+
+    let bonus = 50; // partial
+    if (isGame) bonus = 250;
+    if (isSlam) bonus = 750;
+
+    let extraBonus = 0;
+    if (doubled) extraBonus += 100;
+    if (redoubled) extraBonus += 200;
+
+    // Overtricks
+    let overtrickPoints = 0;
+    if (made > 0) {
+      if (!doubled && !redoubled) {
+        overtrickPoints = made * 20;
+      } else if (doubled) {
+        overtrickPoints = made * 100;
+      } else if (redoubled) {
+        overtrickPoints = made * 200;
+      }
+    }
+
+    return trickPoints + bonus + extraBonus + overtrickPoints;
+  } else {
+    // ── Down ── (non-vul penalties, standard bridge)
+    const down = -made;
+    if (!doubled && !redoubled) {
+      return -(down * 50);
+    } else if (doubled) {
+      // 100, 300, 500, 800, ...
+      let pen = 0;
+      if (down >= 1) pen += 100;
+      if (down >= 2) pen += 200;
+      if (down >= 3) pen += 200;
+      for (let i = 4; i <= down; i++) pen += 300;
+      return -pen;
+    } else {
+      // Redoubled: double the doubled penalty
+      let pen = 0;
+      if (down >= 1) pen += 200;
+      if (down >= 2) pen += 400;
+      if (down >= 3) pen += 400;
+      for (let i = 4; i <= down; i++) pen += 600;
+      return -pen;
+    }
+  }
+}
+
+function recordBoard(score, contract, declarerTricks) {
+  const rec = {
+    boardNum: state.boardNum,
+    hands: state.allHands,
+    auction: [...state.auction],
+    contract: contract ? { ...contract } : null,
+    declarerTricks: declarerTricks || 0,
+    score,
+    players: JSON.parse(JSON.stringify(state.players)),
+    timestamp: new Date().toLocaleString('zh-CN'),
+  };
+  state.history.push(rec);
+  localStorage.setItem('minibridge-history', JSON.stringify(state.history));
+}
+
+// ══════════════════════════════════════════════
+// RENDERING
+// ══════════════════════════════════════════════
+function renderAll() {
+  updatePlayerLabels();
+  updateInfoBar();
+  renderHands();
+  renderTrick();
+  renderAuction();
+  renderContract();
+  updateBiddingBox();
+}
+
+function updatePlayerLabels() {
+  for (let s of SEATS) {
+    const el = document.getElementById(`name-${s}`);
+    const p = state.players[s];
+    el.textContent = p ? `${SEAT_NAMES[s]} ${p.name}` : `${SEAT_NAMES[s]} (空位)`;
+
+    const label = document.getElementById(`label-${s}`);
+    label.classList.toggle('active', state.turnSeat === s);
+
+    const tricks = document.getElementById(`tricks-${s}`);
+    if (state.phase === 'playing' || state.phase === 'scoring') {
+      const side = (SEATS.indexOf(s) % 2 === 0) ? 'NS' : 'EW';
+      tricks.textContent = `墩数: ${state.trickWins[side]}`;
+    } else {
+      tricks.textContent = '';
+    }
+  }
+}
+
+function updateInfoBar() {
+  const bar = document.getElementById('info-bar');
+  if (state.phase === 'waiting') {
+    const count = SEATS.filter(s => state.players[s]).length;
+    bar.textContent = `等待玩家 (${count}/4)${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
+  } else if (state.phase === 'bidding') {
+    bar.textContent = `第 ${state.boardNum} 局 · 叫牌中 · 轮到 ${SEAT_NAMES[state.turnSeat]}`;
+  } else if (state.phase === 'playing') {
+    bar.textContent = `第 ${state.boardNum} 局 · ${formatContract(state.contract)} · 轮到 ${SEAT_NAMES[state.turnSeat]}`;
+  } else if (state.phase === 'scoring') {
+    bar.textContent = `第 ${state.boardNum} 局 · 结束`;
+  }
+}
+
+function renderHands() {
+  for (let s of SEATS) {
+    const el = document.getElementById(`hand-${s}`);
+    el.innerHTML = '';
+    const hand = state.hands[s] || [];
+
+    const canSee = (s === mySeat) ||
+                   (state.phase === 'playing' && s === state.dummy) ||
+                   (state.phase === 'scoring');
+
+    const isMyTurn = state.turnSeat === s && state.phase === 'playing';
+    const canIPlay = (s === mySeat) ||
+                     (mySeat && s === state.dummy && state.contract &&
+                      state.contract.declarer === mySeat);
+
+    for (let card of hand) {
+      const div = document.createElement('div');
+      div.className = `card suit-${card.suit.toLowerCase()}`;
+
+      if (canSee) {
+        div.innerHTML = `<span class="suit">${SUIT_SYMBOLS[card.suit]}</span><span>${card.rank}</span>`;
+      } else {
+        div.classList.add('face-down');
+      }
+
+      if (isMyTurn && canIPlay && canSee) {
+        // Check if legal play
+        if (isLegalPlay(s, card)) {
+          div.classList.add('playable');
+          div.onclick = () => {
+            sendAction({ type:'play_card', seat: s, card });
+            if (isHost) processPlayCard(s, card);
+          };
+        }
+      }
+
+      el.appendChild(div);
+    }
+  }
+}
+
+function isLegalPlay(seat, card) {
+  if (state.currentTrick.length === 0) return true;
+  const leadSuit = state.currentTrick[0].card.suit;
+  if (card.suit === leadSuit) return true;
+  // Must follow suit if possible
+  const hand = state.hands[seat];
+  const hasLeadSuit = hand.some(c => c.suit === leadSuit);
+  return !hasLeadSuit;
+}
+
+function renderTrick() {
+  const area = document.getElementById('trick-area');
+  area.innerHTML = '';
+  for (let play of state.currentTrick) {
+    const div = document.createElement('div');
+    const posMap = { N:'north', E:'east', S:'south', W:'west' };
+    div.className = `trick-card ${posMap[play.seat]}`;
+    const sc = getSuitColor(play.card.suit);
+    div.innerHTML = `<span style="color:${sc};font-size:1.2em">${SUIT_SYMBOLS[play.card.suit]}</span><span style="color:#333">${play.card.rank}</span>`;
+    area.appendChild(div);
+  }
+}
+
+function getSuitColor(suit) {
+  return (suit === 'H') ? '#c0392b' :
+         (suit === 'D') ? '#d4760a' :
+         (suit === 'S') ? '#1a1a2e' : '#27ae60';
+}
+
+function renderAuction() {
+  const el = document.getElementById('auction-display');
+  if (state.auction.length === 0 && state.phase !== 'bidding') {
+    el.style.display = 'none';
+    return;
+  }
+  if (state.phase === 'bidding' || state.phase === 'playing') {
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+    return;
+  }
+
+  let html = '<table><tr>';
+  // Header in dealer order
+  const dealerIdx = state.dealer;
+  for (let i = 0; i < 4; i++) {
+    html += `<th>${SEAT_NAMES[SEATS[(dealerIdx + i) % 4]]}</th>`;
+  }
+  html += '</tr><tr>';
+
+  for (let i = 0; i < state.auction.length; i++) {
+    html += `<td>${formatBidCell(state.auction[i].bid)}</td>`;
+    if ((i + 1) % 4 === 0) html += '</tr><tr>';
+  }
+  html += '</tr></table>';
+  el.innerHTML = html;
+}
+
+function formatBidCell(bid) {
+  if (bid === 'Pass') return '<span style="color:#888">Pass</span>';
+  if (bid === 'X') return '<span style="color:#e74c3c">X</span>';
+  if (bid === 'XX') return '<span style="color:#3498db">XX</span>';
+  const level = bid[0];
+  const suit = bid.slice(1);
+  if (suit === 'NT') return `${level}NT`;
+  const color = getSuitColorDark(suit);
+  return `${level}<span style="color:${color}">${SUIT_SYMBOLS[suit]}</span>`;
+}
+
+function getSuitColorDark(suit) {
+  return (suit === 'H') ? '#e74c3c' :
+         (suit === 'D') ? '#e67e22' :
+         (suit === 'S') ? '#ccc' : '#2ecc71';
+}
+
+function renderContract() {
+  const el = document.getElementById('contract-display');
+  if (state.contract && state.phase === 'playing') {
+    el.textContent = formatContract(state.contract);
+  } else {
+    el.textContent = '';
+  }
+}
+
+function formatContract(c) {
+  if (!c) return '';
+  let s = `${c.level}`;
+  if (c.suit === 'NT') s += 'NT';
+  else s += SUIT_SYMBOLS[c.suit];
+  if (c.redoubled) s += 'XX';
+  else if (c.doubled) s += 'X';
+  s += ` ${SEAT_NAMES[c.declarer]}`;
+  return s;
+}
+
+function updateBiddingBox() {
+  const box = document.getElementById('bidding-box');
+  if (state.phase !== 'bidding' || state.turnSeat !== mySeat) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+
+  // Update bid buttons
+  const btns = document.querySelectorAll('.bid-btn[data-bid]');
+  btns.forEach(btn => {
+    btn.disabled = !isValidBid(mySeat, btn.dataset.bid);
+  });
+
+  document.getElementById('dbl-btn').disabled = !isValidBid(mySeat, 'X');
+  document.getElementById('rdbl-btn').disabled = !isValidBid(mySeat, 'XX');
+}
+
+function buildBidGrid() {
+  const grid = document.getElementById('bid-grid');
+  grid.innerHTML = '';
+  for (let level of LEVELS) {
+    for (let suit of BID_SUITS) {
+      const bid = `${level}${suit}`;
+      const btn = document.createElement('button');
+      btn.className = 'bid-btn';
+      btn.dataset.bid = bid;
+      if (suit === 'NT') {
+        btn.textContent = `${level}NT`;
+      } else {
+        btn.innerHTML = `${level}${SUIT_SYMBOLS[suit]}`;
+      }
+      btn.onclick = () => makeBid(bid);
+      grid.appendChild(btn);
+    }
+  }
+}
+
+window.makeBid = function(bid) {
+  if (!mySeat || state.turnSeat !== mySeat) return;
+  if (!isValidBid(mySeat, bid)) return;
+
+  sendAction({ type:'bid', seat: mySeat, bid });
+  if (isHost) processBid(mySeat, bid);
+};
+
+// ── Score Display ──
+function showScore(title, detail, score) {
+  document.getElementById('score-title').textContent = title;
+  document.getElementById('score-detail').textContent = detail;
+  const scoreStr = score > 0 ? `+${score}` : `${score}`;
+  document.getElementById('score-val').textContent = score === 0 ? '—' : scoreStr;
+  document.getElementById('score-val').style.color = score >= 0 ? '#2ecc71' : '#e74c3c';
+  document.getElementById('score-popup').classList.add('show');
+}
+
+window.closeScore = function() {
+  document.getElementById('score-popup').classList.remove('show');
+  if (isHost) {
+    startNewBoard();
+  } else {
+    sendAction({ type:'request_deal' });
+  }
+};
+
+// ── History ──
+window.toggleHistory = function() {
+  const panel = document.getElementById('history-panel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    renderHistory();
+  }
+};
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (state.history.length === 0) {
+    list.innerHTML = '<div style="color:var(--text-dim)">暂无记录</div>';
+    return;
+  }
+
+  let html = '';
+  for (let i = state.history.length - 1; i >= 0; i--) {
+    const h = state.history[i];
+    const contractStr = h.contract ? formatContract(h.contract) : '全Pass';
+    const scoreStr = h.score > 0 ? `+${h.score}` : `${h.score}`;
+
+    let resultStr = '';
+    if (h.contract) {
+      const needed = TRICKS_NEEDED[h.contract.level];
+      const made = h.declarerTricks - needed;
+      resultStr = made >= 0 ?
+        (made === 0 ? '恰好完成' : `超${made}墩`) :
+        `宕${-made}`;
+    } else {
+      resultStr = '流局';
+    }
+
+    // Format hands
+    let handsStr = '';
+    if (h.hands) {
+      for (let s of SEATS) {
+        const name = h.players[s] ? h.players[s].name : SEAT_NAMES[s];
+        const cards = h.hands[s].map(c => `${SUIT_SYMBOLS[c.suit]}${c.rank}`).join(' ');
+        handsStr += `${SEAT_NAMES[s]}(${name}): ${cards}<br>`;
+      }
+    }
+
+    // Format auction
+    let auctionStr = '';
+    if (h.auction && h.auction.length > 0) {
+      auctionStr = h.auction.map(a => {
+        if (a.bid === 'Pass') return 'P';
+        if (a.bid === 'X' || a.bid === 'XX') return a.bid;
+        const suit = a.bid.slice(1);
+        return a.bid[0] + (suit === 'NT' ? 'NT' : SUIT_SYMBOLS[suit]);
+      }).join('-');
+    }
+
+    html += `
+      <div class="history-item">
+        <div><span class="board-num">第 ${h.boardNum} 局</span> · ${h.timestamp}</div>
+        <div class="contract">${contractStr} · ${resultStr}</div>
+        <div class="result">得分: <span style="color:${h.score >= 0 ? '#2ecc71' : '#e74c3c'}">${scoreStr}</span></div>
+        ${auctionStr ? `<div class="hands-detail">叫牌: ${auctionStr}</div>` : ''}
+        <div class="hands-detail">${handsStr}</div>
+      </div>
+    `;
+  }
+  list.innerHTML = html;
+}
+
+</script>
+</body>
+</html>
