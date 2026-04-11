@@ -443,8 +443,9 @@ body {
 
 <!-- ═══ GAME ═══ -->
 <div id="game">
-  <div id="info-bar">等待玩家加入...</div>
+  <div id="info-bar">等待连接...</div>
   <button id="history-btn" onclick="toggleHistory()">📋 历史</button>
+  <button id="start-btn" onclick="manualStart()" style="position:absolute;top:8px;left:12px;padding:6px 14px;background:#2d7a4f;border:1px solid #3a9462;color:#fff;border-radius:6px;cursor:pointer;font-size:0.8em;z-index:20;display:none;">开始发牌</button>
 
   <div class="table-area">
     <!-- Player labels -->
@@ -565,53 +566,58 @@ window.joinGame = function() {
   [sendState, getState] = room.makeAction('state');
   [sendAction, getAction] = room.makeAction('action');
 
-  myPeerId = room.selfId || Math.random().toString(36).slice(2);
+  // Trystero sets selfId synchronously on joinRoom
+  myPeerId = room.selfId;
 
-  // When a new peer joins
-  room.onPeerJoin(peerId => {
-    console.log('Peer joined:', peerId);
-    // Send our info to them
-    sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
-    // If host, send full state
-    if (isHost) {
-      setTimeout(() => sendState(state, peerId), 500);
-    }
-  });
-
-  room.onPeerLeave(peerId => {
-    console.log('Peer left:', peerId);
-    // Remove from players
-    for (let s of SEATS) {
-      if (state.players[s] && state.players[s].peerId === peerId) {
-        state.players[s] = null;
-        updatePlayerLabels();
-      }
-    }
-    delete peers[peerId];
-  });
-
-  // Receive actions
-  getAction((data, peerId) => {
-    handleAction(data, peerId);
-  });
-
-  // Receive state (from host)
-  getState((data, peerId) => {
-    if (peerId !== myPeerId) {
-      state = data;
-      renderAll();
-    }
-  });
-
-  // Register self
+  // Register self locally
   if (mySeat) {
     state.players[mySeat] = { peerId: myPeerId, name: myName };
   }
   peers[myPeerId] = { seat: mySeat, name: myName };
 
-  // First person is host
+  // ── Peer events ──
+  room.onPeerJoin(peerId => {
+    console.log('[net] peer joined:', peerId);
+    // Send hello to the new peer (with slight delay for channel readiness)
+    setTimeout(() => {
+      sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
+    }, 300);
+  });
+
+  room.onPeerLeave(peerId => {
+    console.log('[net] peer left:', peerId);
+    for (let s of SEATS) {
+      if (state.players[s] && state.players[s].peerId === peerId) {
+        state.players[s] = null;
+      }
+    }
+    delete peers[peerId];
+    electHost();
+    renderAll();
+  });
+
+  // ── Receive actions ──
+  getAction((data, peerId) => {
+    handleAction(data, peerId);
+  });
+
+  // ── Receive state (from host) ──
+  getState((data, peerId) => {
+    // Non-hosts accept state from host
+    if (!isHost) {
+      // Preserve our local history
+      const myHistory = state.history;
+      state = data;
+      // Merge history
+      if (myHistory.length > state.history.length) {
+        state.history = myHistory;
+      }
+      renderAll();
+    }
+  });
+
+  // Assume host initially (if someone else is already host, they'll send state and we'll know)
   isHost = true;
-  room.onPeerJoin(() => {}); // just to trigger
 
   updatePlayerLabels();
   updateInfoBar();
@@ -624,18 +630,43 @@ window.joinGame = function() {
   }
 };
 
+// Elect host: the peer with the lowest peerId among all connected becomes host
+function electHost() {
+  const allIds = [myPeerId, ...Object.keys(peers).filter(id => id !== myPeerId)];
+  allIds.sort();
+  isHost = (allIds[0] === myPeerId);
+  console.log('[net] host election:', isHost ? 'I am host' : 'not host');
+}
+
 function handleAction(data, peerId) {
   if (data.type === 'hello') {
+    const isNew = !peers[peerId];
     peers[peerId] = { seat: data.seat, name: data.name };
+
     if (data.seat && !state.players[data.seat]) {
       state.players[data.seat] = { peerId: data.peerId || peerId, name: data.name };
-      updatePlayerLabels();
-      checkReady();
-      if (isHost) broadcastState();
-    } else if (data.seat && state.players[data.seat]) {
-      // Seat taken - notify
+    } else if (data.seat && state.players[data.seat] && state.players[data.seat].peerId !== (data.peerId || peerId)) {
+      // Seat taken
       sendAction({ type:'seat_taken', seat: data.seat }, peerId);
     }
+
+    // Re-elect host with new peer set
+    electHost();
+
+    // If I'm host, send full state to everyone after a moment
+    if (isHost) {
+      setTimeout(() => broadcastState(), 400);
+    }
+
+    // If new peer, send hello back so they know about us too
+    if (isNew) {
+      setTimeout(() => {
+        sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
+      }, 200);
+    }
+
+    checkReady();
+    renderAll();
   }
   else if (data.type === 'bid') {
     if (state.phase === 'bidding' && data.seat === state.turnSeat) {
@@ -1049,7 +1080,25 @@ function renderAll() {
   renderAuction();
   renderContract();
   updateBiddingBox();
+  // Show start button if waiting and host
+  const startBtn = document.getElementById('start-btn');
+  if (startBtn) {
+    const seatedCount = SEATS.filter(s => state.players[s]).length;
+    startBtn.style.display = (state.phase === 'waiting' && isHost && seatedCount >= 2) ? 'block' : 'none';
+  }
 }
+
+window.manualStart = function() {
+  if (isHost && state.phase === 'waiting') {
+    // Fill empty seats with dummy players for testing
+    for (let s of SEATS) {
+      if (!state.players[s]) {
+        state.players[s] = { peerId: 'bot-' + s, name: '机器人' + SEAT_NAMES[s] };
+      }
+    }
+    startNewBoard();
+  }
+};
 
 function updatePlayerLabels() {
   for (let s of SEATS) {
@@ -1072,9 +1121,11 @@ function updatePlayerLabels() {
 
 function updateInfoBar() {
   const bar = document.getElementById('info-bar');
+  const peerCount = Object.keys(peers).length - 1; // exclude self
+  const connStr = peerCount > 0 ? `已连接${peerCount}人` : '等待连接...';
   if (state.phase === 'waiting') {
     const count = SEATS.filter(s => state.players[s]).length;
-    bar.textContent = `等待玩家 (${count}/4)${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
+    bar.textContent = `${connStr} · 就座 ${count}/4${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
   } else if (state.phase === 'bidding') {
     bar.textContent = `第 ${state.boardNum} 局 · 叫牌中 · 轮到 ${SEAT_NAMES[state.turnSeat]}`;
   } else if (state.phase === 'playing') {
