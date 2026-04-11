@@ -497,10 +497,9 @@ body {
   </div>
 </div>
 
-<!-- Trystero via CDN -->
-<script type="module">
-import { joinRoom, selfId } from 'https://esm.sh/@trystero-p2p/mqtt';
-
+<!-- PeerJS CDN -->
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
 // ══════════════════════════════════════════════
 // CONSTANTS
 // ══════════════════════════════════════════════
@@ -512,920 +511,521 @@ const SEATS = ['N','E','S','W'];
 const SEAT_NAMES = { N:'北', E:'东', S:'南', W:'西' };
 const BID_SUITS = ['C','D','H','S','NT'];
 const LEVELS = [1,2,3,4];
-// Tricks needed: level 1=4, 2=5, 3=6, 4=7
 const TRICKS_NEEDED = { 1:4, 2:5, 3:6, 4:7 };
 
 // ══════════════════════════════════════════════
 // GAME STATE
 // ══════════════════════════════════════════════
 let myPeerId = null;
-let mySeat = null; // null = spectator
+let mySeat = null;
 let myName = '';
-let room = null;
-
-// Actions (set by trystero)
-let sendState, getState;
-let sendAction, getAction;
-
-let state = {
-  phase: 'waiting', // waiting, bidding, playing, scoring
-  dealer: 0, // index into SEATS
-  hands: { N:[], E:[], S:[], W:[] },
-  players: { N:null, E:null, S:null, W:null }, // { peerId, name }
-  auction: [], // [{seat, bid}]
-  contract: null, // { level, suit, doubled, redoubled, declarer }
-  currentTrick: [], // [{seat, card}]
-  trickWins: { NS:0, EW:0 },
-  trickLead: null, // seat who leads
-  turnSeat: null,
-  dummy: null,
-  boardNum: 0,
-  history: [],
-  allHands: null, // saved for history
-};
-
-// Peer tracking
-let peers = {}; // peerId -> { seat, name }
+let peer = null;
+let conns = {};
 let isHost = false;
+let state = {
+  phase: 'waiting', dealer: 0,
+  hands: { N:[], E:[], S:[], W:[] },
+  players: { N:null, E:null, S:null, W:null },
+  auction: [], contract: null, currentTrick: [],
+  trickWins: { NS:0, EW:0 }, trickLead: null,
+  turnSeat: null, dummy: null, boardNum: 0,
+  history: [], allHands: null,
+};
+let peers = {};
 
-// ══════════════════════════════════════════════
-// TRYSTERO SETUP
-// ══════════════════════════════════════════════
 function log(msg) {
   console.log('[minibridge]', msg);
   const bar = document.getElementById('info-bar');
-  if (bar && state.phase === 'waiting') {
-    // Show last log in info bar for debugging
-    bar.textContent = msg;
+  if (bar && state.phase === 'waiting') bar.textContent = msg;
+}
+
+// ══════════════════════════════════════════════
+// NETWORKING - PeerJS star topology
+// ══════════════════════════════════════════════
+function broadcast(msg, excludeId) {
+  const data = JSON.stringify(msg);
+  for (let id in conns) {
+    if (id !== excludeId && conns[id] && conns[id].open) {
+      try { conns[id].send(data); } catch(e) {}
+    }
   }
 }
 
+function sendToHost(msg) {
+  const data = JSON.stringify(msg);
+  for (let id in conns) {
+    if (conns[id] && conns[id].open) {
+      try { conns[id].send(data); } catch(e) {}
+      return;
+    }
+  }
+}
+
+function setupConn(conn) {
+  const pid = conn.peer;
+  conns[pid] = conn;
+  conn.on('open', () => {
+    log('已连接: ' + pid.slice(0,12));
+    conn.send(JSON.stringify({ type:'hello', seat:mySeat, name:myName }));
+    if (isHost) {
+      setTimeout(() => {
+        if (conn.open) conn.send(JSON.stringify({ type:'full_state', state:state }));
+      }, 500);
+    }
+  });
+  conn.on('data', raw => {
+    let d; try { d = JSON.parse(raw); } catch(e) { return; }
+    onMessage(d, pid);
+  });
+  conn.on('close', () => {
+    log('断开: ' + pid.slice(0,12));
+    delete conns[pid];
+    for (let s of SEATS) {
+      if (state.players[s] && state.players[s].peerId === pid) state.players[s] = null;
+    }
+    delete peers[pid];
+    renderAll();
+  });
+  conn.on('error', e => log('连接错误: ' + e.type));
+}
+
+function onMessage(d, fromId) {
+  if (d.type === 'hello') {
+    peers[fromId] = { seat:d.seat, name:d.name };
+    log('玩家加入: ' + d.name + ' (' + (d.seat ? SEAT_NAMES[d.seat] : '旁观') + ')');
+    if (d.seat && !state.players[d.seat]) {
+      state.players[d.seat] = { peerId:fromId, name:d.name };
+    } else if (d.seat && state.players[d.seat] && state.players[d.seat].peerId !== fromId) {
+      if (conns[fromId] && conns[fromId].open)
+        conns[fromId].send(JSON.stringify({ type:'seat_taken', seat:d.seat }));
+      return;
+    }
+    if (isHost) {
+      broadcast({ type:'peer_joined', seat:d.seat, name:d.name, peerId:fromId }, fromId);
+      setTimeout(() => broadcastState(), 300);
+    }
+    checkReady();
+    renderAll();
+  }
+  else if (d.type === 'peer_joined') {
+    peers[d.peerId] = { seat:d.seat, name:d.name };
+    if (d.seat && !state.players[d.seat]) state.players[d.seat] = { peerId:d.peerId, name:d.name };
+    renderAll();
+  }
+  else if (d.type === 'full_state') {
+    if (!isHost) {
+      const h = state.history;
+      state = d.state;
+      if (h.length > state.history.length) state.history = h;
+      renderAll();
+    }
+  }
+  else if (d.type === 'bid') {
+    if (isHost && state.phase === 'bidding' && d.seat === state.turnSeat) processBid(d.seat, d.bid);
+  }
+  else if (d.type === 'play_card') {
+    if (isHost && state.phase === 'playing' && d.seat === state.turnSeat) processPlayCard(d.seat, d.card);
+  }
+  else if (d.type === 'request_deal') {
+    if (isHost) startNewBoard();
+  }
+  else if (d.type === 'seat_taken') {
+    alert('座位 ' + SEAT_NAMES[d.seat] + ' 已被占用！');
+    mySeat = null; renderAll();
+  }
+}
+
+function broadcastState() {
+  if (!isHost) return;
+  broadcast({ type:'full_state', state:state });
+}
+
+// ══════════════════════════════════════════════
+// JOIN
+// ══════════════════════════════════════════════
 window.joinGame = function() {
   myName = document.getElementById('nickname').value.trim() || '玩家';
   const roomId = document.getElementById('room-id').value.trim();
   mySeat = document.getElementById('seat-select').value || null;
-
   if (!roomId) { alert('请输入房间号'); return; }
 
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('game').style.display = 'block';
 
-  myPeerId = selfId;
-  log(`我的ID: ${myPeerId.slice(0,8)}... 正在连接房间 [${roomId}]`);
+  const hostId = 'mb-' + roomId.replace(/[^a-zA-Z0-9_-]/g, '');
+  log('正在连接房间 ' + roomId + '...');
 
-  room = joinRoom({ appId: 'minibridge-2026-v2' }, roomId);
+  // Try to be host
+  peer = new Peer(hostId);
 
-  [sendState, getState] = room.makeAction('state');
-  [sendAction, getAction] = room.makeAction('action');
-
-  // Register self locally
-  if (mySeat) {
-    state.players[mySeat] = { peerId: myPeerId, name: myName };
-  }
-  peers[myPeerId] = { seat: mySeat, name: myName };
-
-  // ── Peer events ──
-  room.onPeerJoin(peerId => {
-    log(`发现玩家: ${peerId.slice(0,8)}...`);
-    // Send hello with increasing delays to ensure channel is ready
-    for (let delay of [200, 800, 2000]) {
-      setTimeout(() => {
-        try {
-          sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
-          log(`发送hello (${delay}ms) -> ${peerId.slice(0,8)}`);
-        } catch(e) {
-          log(`hello发送失败 (${delay}ms): ${e.message}`);
-        }
-      }, delay);
-    }
-  });
-
-  room.onPeerLeave(peerId => {
-    log(`玩家离开: ${peerId.slice(0,8)}...`);
-    for (let s of SEATS) {
-      if (state.players[s] && state.players[s].peerId === peerId) {
-        state.players[s] = null;
-      }
-    }
-    delete peers[peerId];
-    electHost();
+  peer.on('open', id => {
+    myPeerId = id;
+    isHost = true;
+    log('你是房主 · 等待其他玩家加入');
+    if (mySeat) state.players[mySeat] = { peerId:myPeerId, name:myName };
+    peers[myPeerId] = { seat:mySeat, name:myName };
     renderAll();
+    buildBidGrid();
   });
 
-  // ── Receive actions ──
-  getAction((data, peerId) => {
-    log(`收到action: ${data.type} from ${peerId.slice(0,8)}`);
-    handleAction(data, peerId);
+  peer.on('connection', conn => {
+    log('有玩家正在连接...');
+    setupConn(conn);
   });
 
-  // ── Receive state (from host) ──
-  getState((data, peerId) => {
-    log(`收到state from ${peerId.slice(0,8)}, phase=${data.phase}`);
-    if (!isHost) {
-      const myHistory = state.history;
-      state = data;
-      if (myHistory.length > state.history.length) {
-        state.history = myHistory;
-      }
-      renderAll();
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id') {
+      // Host exists, join as client
+      peer.destroy();
+      peer = new Peer();
+      peer.on('open', id => {
+        myPeerId = id;
+        isHost = false;
+        log('正在加入房间...');
+        if (mySeat) state.players[mySeat] = { peerId:myPeerId, name:myName };
+        peers[myPeerId] = { seat:mySeat, name:myName };
+        const conn = peer.connect(hostId, { reliable:true });
+        setupConn(conn);
+        renderAll();
+        buildBidGrid();
+      });
+      peer.on('error', e2 => log('连接失败: ' + e2.type));
+    } else {
+      log('错误: ' + err.type);
     }
   });
 
-  isHost = true;
-
-  renderAll();
-  buildBidGrid();
-
-  // Load history from localStorage
+  // Load history
   const saved = localStorage.getItem('minibridge-history');
-  if (saved) {
-    try { state.history = JSON.parse(saved); } catch(e) {}
-  }
-
-  // Periodic status update
-  setInterval(() => {
-    if (state.phase === 'waiting') {
-      const peerCount = Object.keys(peers).length - 1;
-      const seated = SEATS.filter(s => state.players[s]).length;
-      const bar = document.getElementById('info-bar');
-      bar.textContent = `已连接 ${peerCount} 人 · 就座 ${seated}/4${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
-    }
-  }, 3000);
+  if (saved) { try { state.history = JSON.parse(saved); } catch(e) {} }
 };
-
-// Elect host: lowest peerId
-function electHost() {
-  const allIds = [myPeerId, ...Object.keys(peers).filter(id => id !== myPeerId)];
-  allIds.sort();
-  isHost = (allIds[0] === myPeerId);
-  log(`host选举: ${isHost ? '我是host' : '我不是host'}`);
-}
-
-function handleAction(data, peerId) {
-  if (data.type === 'hello') {
-    const isNew = !peers[peerId];
-    peers[peerId] = { seat: data.seat, name: data.name };
-    log(`握手: ${data.name}(${data.seat || '旁观'}) from ${peerId.slice(0,8)}`);
-
-    if (data.seat && !state.players[data.seat]) {
-      state.players[data.seat] = { peerId: data.peerId || peerId, name: data.name };
-    } else if (data.seat && state.players[data.seat] && state.players[data.seat].peerId !== (data.peerId || peerId)) {
-      sendAction({ type:'seat_taken', seat: data.seat }, peerId);
-    }
-
-    electHost();
-
-    // Host sends full state
-    if (isHost) {
-      setTimeout(() => broadcastState(), 500);
-    }
-
-    // Reply hello if new
-    if (isNew) {
-      setTimeout(() => {
-        sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
-      }, 300);
-    }
-
-    checkReady();
-    renderAll();
-  }
-  else if (data.type === 'bid') {
-    if (state.phase === 'bidding' && data.seat === state.turnSeat) {
-      processBid(data.seat, data.bid);
-    }
-  }
-  else if (data.type === 'play_card') {
-    if (state.phase === 'playing' && data.seat === state.turnSeat) {
-      processPlayCard(data.seat, data.card);
-    }
-  }
-  else if (data.type === 'request_deal') {
-    if (isHost) startNewBoard();
-  }
-  else if (data.type === 'seat_taken') {
-    alert(`座位 ${SEAT_NAMES[data.seat]} 已被占用！你将以旁观者身份加入。`);
-    mySeat = null;
-  }
-}
-
-function broadcastState() {
-  sendState(state);
-}
 
 // ══════════════════════════════════════════════
 // GAME LOGIC
 // ══════════════════════════════════════════════
 function checkReady() {
-  const seated = SEATS.filter(s => state.players[s]);
-  if (seated.length === 4 && state.phase === 'waiting') {
-    startNewBoard();
-  }
+  if (SEATS.filter(s => state.players[s]).length === 4 && state.phase === 'waiting') startNewBoard();
 }
 
 function startNewBoard() {
   state.boardNum++;
   state.dealer = (state.dealer + (state.boardNum > 1 ? 1 : 0)) % 4;
-  state.phase = 'bidding';
-  state.auction = [];
-  state.contract = null;
-  state.currentTrick = [];
-  state.trickWins = { NS:0, EW:0 };
-  state.trickLead = null;
-  state.dummy = null;
+  state.phase = 'bidding'; state.auction = []; state.contract = null;
+  state.currentTrick = []; state.trickWins = { NS:0, EW:0 };
+  state.trickLead = null; state.dummy = null;
   state.turnSeat = SEATS[state.dealer];
-
-  // Deal 28 cards
   const deck = [];
-  for (let s of SUITS) {
-    for (let r of RANKS) {
-      deck.push({ suit: s, rank: r });
-    }
-  }
+  for (let s of SUITS) for (let r of RANKS) deck.push({ suit:s, rank:r });
   shuffle(deck);
-  state.hands = { N: deck.slice(0,7), E: deck.slice(7,14), S: deck.slice(14,21), W: deck.slice(21,28) };
-
-  // Sort hands
-  for (let s of SEATS) {
-    state.hands[s].sort((a,b) => {
-      const si = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
-      if (si !== 0) return si;
-      return RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank);
-    });
-  }
-
+  state.hands = { N:deck.slice(0,7), E:deck.slice(7,14), S:deck.slice(14,21), W:deck.slice(21,28) };
+  for (let s of SEATS) state.hands[s].sort((a,b) => {
+    const si = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
+    return si !== 0 ? si : RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank);
+  });
   state.allHands = JSON.parse(JSON.stringify(state.hands));
-
-  renderAll();
-  broadcastState();
+  renderAll(); broadcastState();
 }
 
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-}
+function shuffle(a) { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
 
-// ── Bidding ──
 function getLastContractBid() {
-  for (let i = state.auction.length - 1; i >= 0; i--) {
-    const b = state.auction[i].bid;
-    if (b !== 'Pass' && b !== 'X' && b !== 'XX') return { ...state.auction[i], index: i };
+  for (let i=state.auction.length-1;i>=0;i--) {
+    const b=state.auction[i].bid;
+    if(b!=='Pass'&&b!=='X'&&b!=='XX') return {...state.auction[i],index:i};
   }
   return null;
 }
-
 function bidToValue(bid) {
-  if (bid === 'Pass' || bid === 'X' || bid === 'XX') return -1;
-  const level = parseInt(bid[0]);
-  const suit = bid.slice(1);
-  return level * 10 + BID_SUITS.indexOf(suit);
+  if(bid==='Pass'||bid==='X'||bid==='XX') return -1;
+  return parseInt(bid[0])*10+BID_SUITS.indexOf(bid.slice(1));
+}
+function isValidBid(seat,bid) {
+  if(bid==='Pass') return true;
+  const lc=getLastContractBid();
+  if(bid==='X') {
+    if(!lc) return false;
+    if((SEATS.indexOf(seat)%2)===(SEATS.indexOf(lc.seat)%2)) return false;
+    for(let i=lc.index+1;i<state.auction.length;i++) if(state.auction[i].bid==='X'||state.auction[i].bid==='XX') return false;
+    for(let i=lc.index+1;i<state.auction.length;i++) if(state.auction[i].bid!=='Pass') return false;
+    return true;
+  }
+  if(bid==='XX') {
+    let lastX=-1;
+    for(let i=state.auction.length-1;i>=0;i--){if(state.auction[i].bid==='X'){lastX=i;break;}if(state.auction[i].bid!=='Pass')break;}
+    if(lastX===-1) return false;
+    return (SEATS.indexOf(seat)%2)!==(SEATS.indexOf(state.auction[lastX].seat)%2);
+  }
+  return lc ? bidToValue(bid)>bidToValue(lc.bid) : true;
 }
 
-function isValidBid(seat, bid) {
-  if (bid === 'Pass') return true;
-
-  const lastContract = getLastContractBid();
-
-  if (bid === 'X') {
-    if (!lastContract) return false;
-    // Can only double opponent's bid
-    const lastBidder = lastContract.seat;
-    const sameTeam = (SEATS.indexOf(seat) % 2) === (SEATS.indexOf(lastBidder) % 2);
-    if (sameTeam) return false;
-    // Check no X or XX after the last contract bid
-    for (let i = lastContract.index + 1; i < state.auction.length; i++) {
-      if (state.auction[i].bid === 'X' || state.auction[i].bid === 'XX') return false;
-    }
-    // Check only passes between last contract and now
-    let onlyPasses = true;
-    for (let i = lastContract.index + 1; i < state.auction.length; i++) {
-      if (state.auction[i].bid !== 'Pass') { onlyPasses = false; break; }
-    }
-    return onlyPasses;
+function processBid(seat,bid) {
+  state.auction.push({seat,bid});
+  const a=state.auction;
+  if(a.length>=4) {
+    if(a.slice(-3).every(x=>x.bid==='Pass')&&a.length>3&&a.some(x=>x.bid!=='Pass'&&x.bid!=='X'&&x.bid!=='XX')) { finalizeAuction(); return; }
+    if(a.slice(-4).every(x=>x.bid==='Pass')) { state.phase='scoring'; state.contract=null; recordBoard(0,null); renderAll(); broadcastState(); showScore('全Pass','本局流局',0); return; }
   }
-
-  if (bid === 'XX') {
-    // Must have a X from opponent after last contract
-    let lastX = -1;
-    for (let i = state.auction.length - 1; i >= 0; i--) {
-      if (state.auction[i].bid === 'X') { lastX = i; break; }
-      if (state.auction[i].bid !== 'Pass') break;
-    }
-    if (lastX === -1) return false;
-    const xSeat = state.auction[lastX].seat;
-    const sameTeam = (SEATS.indexOf(seat) % 2) === (SEATS.indexOf(xSeat) % 2);
-    return !sameTeam; // can only redouble opponent's double
-  }
-
-  // Normal bid - must be higher than last contract
-  if (lastContract) {
-    return bidToValue(bid) > bidToValue(lastContract.bid);
-  }
-  return true;
-}
-
-function processBid(seat, bid) {
-  state.auction.push({ seat, bid });
-
-  // Check if auction ends (3 passes after a contract bid, or 4 passes from start)
-  const a = state.auction;
-  let passedOut = false;
-
-  if (a.length >= 4) {
-    const last3 = a.slice(-3);
-    if (last3.every(x => x.bid === 'Pass') && a.length > 3) {
-      // 3 passes after at least one non-pass bid
-      const hasContract = a.some(x => x.bid !== 'Pass' && x.bid !== 'X' && x.bid !== 'XX');
-      if (hasContract) {
-        finalizeAuction();
-        return;
-      }
-    }
-    if (a.length >= 4 && a.slice(-4).every(x => x.bid === 'Pass')) {
-      // All 4 passed
-      passedOut = true;
-    }
-  }
-
-  if (passedOut) {
-    state.phase = 'scoring';
-    state.contract = null;
-    // Record passed-out board
-    recordBoard(0, null);
-    renderAll();
-    broadcastState();
-    showScore('全Pass', '本局流局', 0);
-    return;
-  }
-
-  // Next turn
-  const idx = SEATS.indexOf(seat);
-  state.turnSeat = SEATS[(idx + 1) % 4];
-
-  renderAll();
-  broadcastState();
+  state.turnSeat=SEATS[(SEATS.indexOf(seat)+1)%4];
+  renderAll(); broadcastState();
 }
 
 function finalizeAuction() {
-  const lastContract = getLastContractBid();
-  const bid = lastContract.bid;
-  const level = parseInt(bid[0]);
-  const suit = bid.slice(1);
-
-  // Find declarer: first person of the declaring side to bid this suit
-  const declarerSide = SEATS.indexOf(lastContract.seat) % 2; // 0=NS, 1=EW
-  let declarer = null;
-  for (let a of state.auction) {
-    if (a.bid !== 'Pass' && a.bid !== 'X' && a.bid !== 'XX') {
-      const s = a.bid.slice(1);
-      if (s === suit && SEATS.indexOf(a.seat) % 2 === declarerSide) {
-        declarer = a.seat;
-        break;
-      }
-    }
-  }
-
-  // Check doubled/redoubled
-  let doubled = false, redoubled = false;
-  for (let i = state.auction.length - 1; i >= 0; i--) {
-    if (state.auction[i].bid === 'XX') { redoubled = true; break; }
-    if (state.auction[i].bid === 'X') { doubled = true; break; }
-    if (state.auction[i].bid !== 'Pass') break;
-  }
-
-  state.contract = { level, suit, doubled, redoubled, declarer };
-
-  // Dummy is declarer's partner
-  const di = SEATS.indexOf(declarer);
-  state.dummy = SEATS[(di + 2) % 4];
-
-  // Lead is left of declarer
-  state.trickLead = SEATS[(di + 1) % 4];
-  state.turnSeat = state.trickLead;
-  state.phase = 'playing';
-  state.currentTrick = [];
-
-  renderAll();
-  broadcastState();
+  const lc=getLastContractBid(), bid=lc.bid, level=parseInt(bid[0]), suit=bid.slice(1);
+  const side=SEATS.indexOf(lc.seat)%2;
+  let declarer=null;
+  for(let a of state.auction) { if(a.bid!=='Pass'&&a.bid!=='X'&&a.bid!=='XX'&&a.bid.slice(1)===suit&&SEATS.indexOf(a.seat)%2===side) { declarer=a.seat; break; } }
+  let doubled=false, redoubled=false;
+  for(let i=state.auction.length-1;i>=0;i--) { if(state.auction[i].bid==='XX'){redoubled=true;break;} if(state.auction[i].bid==='X'){doubled=true;break;} if(state.auction[i].bid!=='Pass')break; }
+  state.contract={level,suit,doubled,redoubled,declarer};
+  const di=SEATS.indexOf(declarer);
+  state.dummy=SEATS[(di+2)%4]; state.trickLead=SEATS[(di+1)%4];
+  state.turnSeat=state.trickLead; state.phase='playing'; state.currentTrick=[];
+  renderAll(); broadcastState();
 }
 
-// ── Card Play ──
-function processPlayCard(seat, card) {
-  // Remove from hand
-  const hand = state.hands[seat];
-  const idx = hand.findIndex(c => c.suit === card.suit && c.rank === card.rank);
-  if (idx === -1) return;
-  hand.splice(idx, 1);
-
-  state.currentTrick.push({ seat, card });
-
-  if (state.currentTrick.length === 4) {
-    // Determine winner
-    const winner = determineTrickWinner(state.currentTrick, state.contract.suit);
-    const winnerSide = (SEATS.indexOf(winner) % 2 === 0) ? 'NS' : 'EW';
-    state.trickWins[winnerSide]++;
-
-    // Small delay then clear trick
-    renderAll();
-    broadcastState();
-
-    setTimeout(() => {
-      state.currentTrick = [];
-      state.trickLead = winner;
-      state.turnSeat = winner;
-
-      // Check if hand is over (all 7 tricks played)
-      if (state.trickWins.NS + state.trickWins.EW === 7) {
-        endPlay();
-      } else {
-        renderAll();
-        broadcastState();
-      }
-    }, 1200);
+function processPlayCard(seat,card) {
+  const hand=state.hands[seat];
+  const idx=hand.findIndex(c=>c.suit===card.suit&&c.rank===card.rank);
+  if(idx===-1) return;
+  hand.splice(idx,1);
+  state.currentTrick.push({seat,card});
+  if(state.currentTrick.length===4) {
+    const winner=determineTrickWinner(state.currentTrick,state.contract.suit);
+    const ws=(SEATS.indexOf(winner)%2===0)?'NS':'EW'; state.trickWins[ws]++;
+    renderAll(); broadcastState();
+    setTimeout(()=>{
+      state.currentTrick=[]; state.trickLead=winner; state.turnSeat=winner;
+      if(state.trickWins.NS+state.trickWins.EW===7) endPlay();
+      else { renderAll(); broadcastState(); }
+    },1200);
     return;
   }
-
-  // Next player
-  const si = SEATS.indexOf(seat);
-  state.turnSeat = SEATS[(si + 1) % 4];
-  renderAll();
-  broadcastState();
+  state.turnSeat=SEATS[(SEATS.indexOf(seat)+1)%4];
+  renderAll(); broadcastState();
 }
 
-function determineTrickWinner(trick, trumpSuit) {
-  const leadSuit = trick[0].card.suit;
-  let best = trick[0];
-
-  for (let i = 1; i < trick.length; i++) {
-    const c = trick[i];
-    if (trumpSuit !== 'NT') {
-      // Trump suit comparison
-      if (c.card.suit === trumpSuit && best.card.suit !== trumpSuit) {
-        best = c;
-      } else if (c.card.suit === trumpSuit && best.card.suit === trumpSuit) {
-        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
-      } else if (c.card.suit === leadSuit && best.card.suit === leadSuit) {
-        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
-      }
-      // else: not trump, not lead suit -> can't win
+function determineTrickWinner(trick,trumpSuit) {
+  const leadSuit=trick[0].card.suit; let best=trick[0];
+  for(let i=1;i<trick.length;i++) {
+    const c=trick[i];
+    if(trumpSuit!=='NT') {
+      if(c.card.suit===trumpSuit&&best.card.suit!==trumpSuit) best=c;
+      else if(c.card.suit===trumpSuit&&best.card.suit===trumpSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
+      else if(c.card.suit===leadSuit&&best.card.suit===leadSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
     } else {
-      // NT: only lead suit matters
-      if (c.card.suit === leadSuit && best.card.suit === leadSuit) {
-        if (RANKS.indexOf(c.card.rank) > RANKS.indexOf(best.card.rank)) best = c;
-      }
-      // If best is not lead suit (shouldn't happen unless first card isn't lead?)
+      if(c.card.suit===leadSuit&&best.card.suit===leadSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
     }
   }
   return best.seat;
 }
 
 function endPlay() {
-  state.phase = 'scoring';
-  const c = state.contract;
-  const declarerSide = (SEATS.indexOf(c.declarer) % 2 === 0) ? 'NS' : 'EW';
-  const declarerTricks = state.trickWins[declarerSide];
-  const needed = TRICKS_NEEDED[c.level];
-  const made = declarerTricks - needed; // positive = overtricks, negative = undertricks
-
-  const score = calculateScore(c, made);
-
-  recordBoard(score, c, declarerTricks);
-  renderAll();
-  broadcastState();
-
-  const contractStr = formatContract(c);
-  const resultStr = made >= 0 ?
-    (made === 0 ? '恰好完成' : `超 ${made} 墩`) :
-    `宕 ${-made}`;
-
-  showScore(
-    contractStr,
-    `庄家: ${SEAT_NAMES[c.declarer]} | ${resultStr} | 赢墩: ${declarerTricks}/7`,
-    score
-  );
+  state.phase='scoring';
+  const c=state.contract, ds=(SEATS.indexOf(c.declarer)%2===0)?'NS':'EW';
+  const dt=state.trickWins[ds], needed=TRICKS_NEEDED[c.level], made=dt-needed;
+  const score=calculateScore(c,made);
+  recordBoard(score,c,dt); renderAll(); broadcastState();
+  const rs=made>=0?(made===0?'恰好完成':'超 '+made+' 墩'):'宕 '+(-made);
+  showScore(formatContract(c),'庄家: '+SEAT_NAMES[c.declarer]+' | '+rs+' | 赢墩: '+dt+'/7',score);
 }
 
-function calculateScore(contract, made) {
-  // made = tricks above/below needed
-  const { level, suit, doubled, redoubled } = contract;
-
-  if (made >= 0) {
-    // ── Made the contract ──
-    let trickPoints = 0;
-    if (suit === 'NT') {
-      trickPoints = 30 + (level - 1) * 20; // first trick 30, rest 20
-    } else {
-      trickPoints = level * 20;
-    }
-
-    let dblMul = 1;
-    if (doubled) dblMul = 2;
-    if (redoubled) dblMul = 4;
-    trickPoints *= dblMul;
-
-    // Is it game? (trickPoints >= 50)
-    const isGame = trickPoints >= 50;
-    // Is it slam? (level 4 = all 7 tricks)
-    const isSlam = level === 4;
-
-    let bonus = 50; // partial
-    if (isGame) bonus = 250;
-    if (isSlam) bonus = 750;
-
-    let extraBonus = 0;
-    if (doubled) extraBonus += 100;
-    if (redoubled) extraBonus += 200;
-
-    // Overtricks
-    let overtrickPoints = 0;
-    if (made > 0) {
-      if (!doubled && !redoubled) {
-        overtrickPoints = made * 20;
-      } else if (doubled) {
-        overtrickPoints = made * 100;
-      } else if (redoubled) {
-        overtrickPoints = made * 200;
-      }
-    }
-
-    return trickPoints + bonus + extraBonus + overtrickPoints;
+function calculateScore(contract,made) {
+  const{level,suit,doubled,redoubled}=contract;
+  if(made>=0) {
+    let tp=suit==='NT'?30+(level-1)*20:level*20;
+    let dm=1; if(doubled)dm=2; if(redoubled)dm=4; tp*=dm;
+    const isGame=tp>=50, isSlam=level===4;
+    let bonus=50; if(isGame)bonus=250; if(isSlam)bonus=750;
+    let eb=0; if(doubled)eb+=100; if(redoubled)eb+=200;
+    let ot=0;
+    if(made>0){if(!doubled&&!redoubled)ot=made*20;else if(doubled)ot=made*100;else ot=made*200;}
+    return tp+bonus+eb+ot;
   } else {
-    // ── Down ── (non-vul penalties, standard bridge)
-    const down = -made;
-    if (!doubled && !redoubled) {
-      return -(down * 50);
-    } else if (doubled) {
-      // 100, 300, 500, 800, ...
-      let pen = 0;
-      if (down >= 1) pen += 100;
-      if (down >= 2) pen += 200;
-      if (down >= 3) pen += 200;
-      for (let i = 4; i <= down; i++) pen += 300;
-      return -pen;
-    } else {
-      // Redoubled: double the doubled penalty
-      let pen = 0;
-      if (down >= 1) pen += 200;
-      if (down >= 2) pen += 400;
-      if (down >= 3) pen += 400;
-      for (let i = 4; i <= down; i++) pen += 600;
-      return -pen;
-    }
+    const down=-made;
+    if(!doubled&&!redoubled) return -(down*50);
+    if(doubled){let p=0;if(down>=1)p+=100;if(down>=2)p+=200;if(down>=3)p+=200;for(let i=4;i<=down;i++)p+=300;return -p;}
+    let p=0;if(down>=1)p+=200;if(down>=2)p+=400;if(down>=3)p+=400;for(let i=4;i<=down;i++)p+=600;return -p;
   }
 }
 
-function recordBoard(score, contract, declarerTricks) {
-  const rec = {
-    boardNum: state.boardNum,
-    hands: state.allHands,
-    auction: [...state.auction],
-    contract: contract ? { ...contract } : null,
-    declarerTricks: declarerTricks || 0,
-    score,
-    players: JSON.parse(JSON.stringify(state.players)),
-    timestamp: new Date().toLocaleString('zh-CN'),
-  };
-  state.history.push(rec);
-  localStorage.setItem('minibridge-history', JSON.stringify(state.history));
+function recordBoard(score,contract,dt) {
+  state.history.push({boardNum:state.boardNum,hands:state.allHands,auction:[...state.auction],
+    contract:contract?{...contract}:null,declarerTricks:dt||0,score,
+    players:JSON.parse(JSON.stringify(state.players)),timestamp:new Date().toLocaleString('zh-CN')});
+  localStorage.setItem('minibridge-history',JSON.stringify(state.history));
 }
 
 // ══════════════════════════════════════════════
 // RENDERING
 // ══════════════════════════════════════════════
 function renderAll() {
-  updatePlayerLabels();
-  updateInfoBar();
-  renderHands();
-  renderTrick();
-  renderAuction();
-  renderContract();
-  updateBiddingBox();
-  // Show start button if waiting and host
-  const startBtn = document.getElementById('start-btn');
-  if (startBtn) {
-    const seatedCount = SEATS.filter(s => state.players[s]).length;
-    startBtn.style.display = (state.phase === 'waiting' && isHost && seatedCount >= 2) ? 'block' : 'none';
-  }
+  updatePlayerLabels(); updateInfoBar(); renderHands(); renderTrick(); renderAuction(); renderContract(); updateBiddingBox();
+  const sb=document.getElementById('start-btn');
+  if(sb){const c=SEATS.filter(s=>state.players[s]).length; sb.style.display=(state.phase==='waiting'&&isHost&&c>=2)?'block':'none';}
 }
 
 window.manualStart = function() {
-  if (isHost && state.phase === 'waiting') {
-    // Fill empty seats with dummy players for testing
-    for (let s of SEATS) {
-      if (!state.players[s]) {
-        state.players[s] = { peerId: 'bot-' + s, name: '机器人' + SEAT_NAMES[s] };
-      }
-    }
+  if(isHost&&state.phase==='waiting'){
+    for(let s of SEATS) if(!state.players[s]) state.players[s]={peerId:'bot-'+s,name:'机器人'+SEAT_NAMES[s]};
     startNewBoard();
   }
 };
 
 function updatePlayerLabels() {
-  for (let s of SEATS) {
-    const el = document.getElementById(`name-${s}`);
-    const p = state.players[s];
-    el.textContent = p ? `${SEAT_NAMES[s]} ${p.name}` : `${SEAT_NAMES[s]} (空位)`;
-
-    const label = document.getElementById(`label-${s}`);
-    label.classList.toggle('active', state.turnSeat === s);
-
-    const tricks = document.getElementById(`tricks-${s}`);
-    if (state.phase === 'playing' || state.phase === 'scoring') {
-      const side = (SEATS.indexOf(s) % 2 === 0) ? 'NS' : 'EW';
-      tricks.textContent = `墩数: ${state.trickWins[side]}`;
-    } else {
-      tricks.textContent = '';
-    }
+  for(let s of SEATS){
+    document.getElementById('name-'+s).textContent=state.players[s]?SEAT_NAMES[s]+' '+state.players[s].name:SEAT_NAMES[s]+' (空位)';
+    document.getElementById('label-'+s).classList.toggle('active',state.turnSeat===s);
+    const t=document.getElementById('tricks-'+s);
+    if(state.phase==='playing'||state.phase==='scoring'){const sd=(SEATS.indexOf(s)%2===0)?'NS':'EW';t.textContent='墩数: '+state.trickWins[sd];}else t.textContent='';
   }
 }
 
 function updateInfoBar() {
-  const bar = document.getElementById('info-bar');
-  const peerCount = Object.keys(peers).length - 1; // exclude self
-  const connStr = peerCount > 0 ? `已连接${peerCount}人` : '等待连接...';
-  if (state.phase === 'waiting') {
-    const count = SEATS.filter(s => state.players[s]).length;
-    bar.textContent = `${connStr} · 就座 ${count}/4${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
-  } else if (state.phase === 'bidding') {
-    bar.textContent = `第 ${state.boardNum} 局 · 叫牌中 · 轮到 ${SEAT_NAMES[state.turnSeat]}`;
-  } else if (state.phase === 'playing') {
-    bar.textContent = `第 ${state.boardNum} 局 · ${formatContract(state.contract)} · 轮到 ${SEAT_NAMES[state.turnSeat]}`;
-  } else if (state.phase === 'scoring') {
-    bar.textContent = `第 ${state.boardNum} 局 · 结束`;
-  }
+  const bar=document.getElementById('info-bar');
+  const pc=Object.keys(peers).length-1;
+  if(state.phase==='waiting'){
+    const c=SEATS.filter(s=>state.players[s]).length;
+    bar.textContent=(pc>0?'已连接'+pc+'人':'等待连接...')+' · 就座 '+c+'/4'+(mySeat?' · 你是'+SEAT_NAMES[mySeat]:' · 旁观');
+  }else if(state.phase==='bidding') bar.textContent='第 '+state.boardNum+' 局 · 叫牌中 · 轮到 '+SEAT_NAMES[state.turnSeat];
+  else if(state.phase==='playing') bar.textContent='第 '+state.boardNum+' 局 · '+formatContract(state.contract)+' · 轮到 '+SEAT_NAMES[state.turnSeat];
+  else bar.textContent='第 '+state.boardNum+' 局 · 结束';
 }
 
 function renderHands() {
-  for (let s of SEATS) {
-    const el = document.getElementById(`hand-${s}`);
-    el.innerHTML = '';
-    const hand = state.hands[s] || [];
-
-    const canSee = (s === mySeat) ||
-                   (state.phase === 'playing' && s === state.dummy) ||
-                   (state.phase === 'scoring') ||
-                   (!mySeat);
-
-    const isMyTurn = state.turnSeat === s && state.phase === 'playing';
-    const canIPlay = (s === mySeat) ||
-                     (mySeat && s === state.dummy && state.contract &&
-                      state.contract.declarer === mySeat);
-
-    for (let card of hand) {
-      const div = document.createElement('div');
-      div.className = `card suit-${card.suit.toLowerCase()}`;
-
-      if (canSee) {
-        div.innerHTML = `<span class="suit">${SUIT_SYMBOLS[card.suit]}</span><span>${card.rank}</span>`;
-      } else {
-        div.classList.add('face-down');
+  for(let s of SEATS){
+    const el=document.getElementById('hand-'+s); el.innerHTML='';
+    const hand=state.hands[s]||[];
+    const canSee=(s===mySeat)||(state.phase==='playing'&&s===state.dummy)||(state.phase==='scoring')||(!mySeat);
+    const isMyTurn=state.turnSeat===s&&state.phase==='playing';
+    const canIPlay=(s===mySeat)||(mySeat&&s===state.dummy&&state.contract&&state.contract.declarer===mySeat);
+    for(let card of hand){
+      const div=document.createElement('div');
+      div.className='card suit-'+card.suit.toLowerCase();
+      if(canSee) div.innerHTML='<span class="suit">'+SUIT_SYMBOLS[card.suit]+'</span><span>'+card.rank+'</span>';
+      else div.classList.add('face-down');
+      if(isMyTurn&&canIPlay&&canSee&&isLegalPlay(s,card)){
+        div.classList.add('playable');
+        div.onclick=(function(st,cd){return function(){
+          if(isHost) processPlayCard(st,cd);
+          else sendToHost({type:'play_card',seat:st,card:cd});
+        };})(s,card);
       }
-
-      if (isMyTurn && canIPlay && canSee) {
-        // Check if legal play
-        if (isLegalPlay(s, card)) {
-          div.classList.add('playable');
-          div.onclick = () => {
-            sendAction({ type:'play_card', seat: s, card });
-            if (isHost) processPlayCard(s, card);
-          };
-        }
-      }
-
       el.appendChild(div);
     }
   }
 }
 
-function isLegalPlay(seat, card) {
-  if (state.currentTrick.length === 0) return true;
-  const leadSuit = state.currentTrick[0].card.suit;
-  if (card.suit === leadSuit) return true;
-  // Must follow suit if possible
-  const hand = state.hands[seat];
-  const hasLeadSuit = hand.some(c => c.suit === leadSuit);
-  return !hasLeadSuit;
+function isLegalPlay(seat,card) {
+  if(state.currentTrick.length===0) return true;
+  const ls=state.currentTrick[0].card.suit;
+  if(card.suit===ls) return true;
+  return !state.hands[seat].some(c=>c.suit===ls);
 }
 
 function renderTrick() {
-  const area = document.getElementById('trick-area');
-  area.innerHTML = '';
-  for (let play of state.currentTrick) {
-    const div = document.createElement('div');
-    const posMap = { N:'north', E:'east', S:'south', W:'west' };
-    div.className = `trick-card ${posMap[play.seat]}`;
-    const sc = getSuitColor(play.card.suit);
-    div.innerHTML = `<span style="color:${sc};font-size:1.2em">${SUIT_SYMBOLS[play.card.suit]}</span><span style="color:#333">${play.card.rank}</span>`;
+  const area=document.getElementById('trick-area'); area.innerHTML='';
+  const pm={N:'north',E:'east',S:'south',W:'west'};
+  for(let p of state.currentTrick){
+    const div=document.createElement('div');
+    div.className='trick-card '+pm[p.seat];
+    const sc=getSuitColor(p.card.suit);
+    div.innerHTML='<span style="color:'+sc+';font-size:1.2em">'+SUIT_SYMBOLS[p.card.suit]+'</span><span style="color:#333">'+p.card.rank+'</span>';
     area.appendChild(div);
   }
 }
 
-function getSuitColor(suit) {
-  return (suit === 'H') ? '#c0392b' :
-         (suit === 'D') ? '#d4760a' :
-         (suit === 'S') ? '#1a1a2e' : '#27ae60';
-}
+function getSuitColor(s){return s==='H'?'#c0392b':s==='D'?'#d4760a':s==='S'?'#1a1a2e':'#27ae60';}
+function getSuitColorDark(s){return s==='H'?'#e74c3c':s==='D'?'#e67e22':s==='S'?'#ccc':'#2ecc71';}
 
 function renderAuction() {
-  const el = document.getElementById('auction-display');
-  if (state.auction.length === 0 && state.phase !== 'bidding') {
-    el.style.display = 'none';
-    return;
-  }
-  if (state.phase === 'bidding' || state.phase === 'playing') {
-    el.style.display = 'block';
-  } else {
-    el.style.display = 'none';
-    return;
-  }
-
-  let html = '<table><tr>';
-  // Header in dealer order
-  const dealerIdx = state.dealer;
-  for (let i = 0; i < 4; i++) {
-    html += `<th>${SEAT_NAMES[SEATS[(dealerIdx + i) % 4]]}</th>`;
-  }
-  html += '</tr><tr>';
-
-  for (let i = 0; i < state.auction.length; i++) {
-    html += `<td>${formatBidCell(state.auction[i].bid)}</td>`;
-    if ((i + 1) % 4 === 0) html += '</tr><tr>';
-  }
-  html += '</tr></table>';
-  el.innerHTML = html;
+  const el=document.getElementById('auction-display');
+  if(state.auction.length===0&&state.phase!=='bidding'){el.style.display='none';return;}
+  if(state.phase==='bidding'||state.phase==='playing') el.style.display='block'; else{el.style.display='none';return;}
+  let h='<table><tr>';
+  for(let i=0;i<4;i++) h+='<th>'+SEAT_NAMES[SEATS[(state.dealer+i)%4]]+'</th>';
+  h+='</tr><tr>';
+  for(let i=0;i<state.auction.length;i++){h+='<td>'+formatBidCell(state.auction[i].bid)+'</td>';if((i+1)%4===0)h+='</tr><tr>';}
+  h+='</tr></table>'; el.innerHTML=h;
 }
-
 function formatBidCell(bid) {
-  if (bid === 'Pass') return '<span style="color:#888">Pass</span>';
-  if (bid === 'X') return '<span style="color:#e74c3c">X</span>';
-  if (bid === 'XX') return '<span style="color:#3498db">XX</span>';
-  const level = bid[0];
-  const suit = bid.slice(1);
-  if (suit === 'NT') return `${level}NT`;
-  const color = getSuitColorDark(suit);
-  return `${level}<span style="color:${color}">${SUIT_SYMBOLS[suit]}</span>`;
-}
-
-function getSuitColorDark(suit) {
-  return (suit === 'H') ? '#e74c3c' :
-         (suit === 'D') ? '#e67e22' :
-         (suit === 'S') ? '#ccc' : '#2ecc71';
+  if(bid==='Pass') return '<span style="color:#888">Pass</span>';
+  if(bid==='X') return '<span style="color:#e74c3c">X</span>';
+  if(bid==='XX') return '<span style="color:#3498db">XX</span>';
+  const s=bid.slice(1); if(s==='NT') return bid[0]+'NT';
+  return bid[0]+'<span style="color:'+getSuitColorDark(s)+'">'+SUIT_SYMBOLS[s]+'</span>';
 }
 
 function renderContract() {
-  const el = document.getElementById('contract-display');
-  if (state.contract && state.phase === 'playing') {
-    el.textContent = formatContract(state.contract);
-  } else {
-    el.textContent = '';
-  }
+  const el=document.getElementById('contract-display');
+  el.textContent=(state.contract&&state.phase==='playing')?formatContract(state.contract):'';
 }
-
 function formatContract(c) {
-  if (!c) return '';
-  let s = `${c.level}`;
-  if (c.suit === 'NT') s += 'NT';
-  else s += SUIT_SYMBOLS[c.suit];
-  if (c.redoubled) s += 'XX';
-  else if (c.doubled) s += 'X';
-  s += ` ${SEAT_NAMES[c.declarer]}`;
-  return s;
+  if(!c) return '';
+  let s=c.level+(c.suit==='NT'?'NT':SUIT_SYMBOLS[c.suit]);
+  if(c.redoubled)s+='XX';else if(c.doubled)s+='X';
+  return s+' '+SEAT_NAMES[c.declarer];
 }
 
 function updateBiddingBox() {
-  const box = document.getElementById('bidding-box');
-  if (state.phase !== 'bidding' || state.turnSeat !== mySeat) {
-    box.style.display = 'none';
-    return;
-  }
-  box.style.display = 'block';
-
-  // Update bid buttons
-  const btns = document.querySelectorAll('.bid-btn[data-bid]');
-  btns.forEach(btn => {
-    btn.disabled = !isValidBid(mySeat, btn.dataset.bid);
-  });
-
-  document.getElementById('dbl-btn').disabled = !isValidBid(mySeat, 'X');
-  document.getElementById('rdbl-btn').disabled = !isValidBid(mySeat, 'XX');
+  const box=document.getElementById('bidding-box');
+  if(state.phase!=='bidding'||state.turnSeat!==mySeat){box.style.display='none';return;}
+  box.style.display='block';
+  document.querySelectorAll('.bid-btn[data-bid]').forEach(b=>{b.disabled=!isValidBid(mySeat,b.dataset.bid);});
+  document.getElementById('dbl-btn').disabled=!isValidBid(mySeat,'X');
+  document.getElementById('rdbl-btn').disabled=!isValidBid(mySeat,'XX');
 }
 
 function buildBidGrid() {
-  const grid = document.getElementById('bid-grid');
-  grid.innerHTML = '';
-  for (let level of LEVELS) {
-    for (let suit of BID_SUITS) {
-      const bid = `${level}${suit}`;
-      const btn = document.createElement('button');
-      btn.className = 'bid-btn';
-      btn.dataset.bid = bid;
-      if (suit === 'NT') {
-        btn.textContent = `${level}NT`;
-      } else {
-        btn.innerHTML = `${level}${SUIT_SYMBOLS[suit]}`;
-      }
-      btn.onclick = () => makeBid(bid);
-      grid.appendChild(btn);
-    }
+  const g=document.getElementById('bid-grid'); g.innerHTML='';
+  for(let l of LEVELS) for(let s of BID_SUITS){
+    const bid=l+s,btn=document.createElement('button');
+    btn.className='bid-btn'; btn.dataset.bid=bid;
+    btn.innerHTML=s==='NT'?l+'NT':l+SUIT_SYMBOLS[s];
+    btn.onclick=()=>makeBid(bid); g.appendChild(btn);
   }
 }
 
 window.makeBid = function(bid) {
-  if (!mySeat || state.turnSeat !== mySeat) return;
-  if (!isValidBid(mySeat, bid)) return;
-
-  sendAction({ type:'bid', seat: mySeat, bid });
-  if (isHost) processBid(mySeat, bid);
+  if(!mySeat||state.turnSeat!==mySeat||!isValidBid(mySeat,bid)) return;
+  if(isHost) processBid(mySeat,bid);
+  else sendToHost({type:'bid',seat:mySeat,bid:bid});
 };
 
-// ── Score Display ──
-function showScore(title, detail, score) {
-  document.getElementById('score-title').textContent = title;
-  document.getElementById('score-detail').textContent = detail;
-  const scoreStr = score > 0 ? `+${score}` : `${score}`;
-  document.getElementById('score-val').textContent = score === 0 ? '—' : scoreStr;
-  document.getElementById('score-val').style.color = score >= 0 ? '#2ecc71' : '#e74c3c';
+function showScore(title,detail,score) {
+  document.getElementById('score-title').textContent=title;
+  document.getElementById('score-detail').textContent=detail;
+  const sv=document.getElementById('score-val');
+  sv.textContent=score===0?'—':(score>0?'+'+score:''+score);
+  sv.style.color=score>=0?'#2ecc71':'#e74c3c';
   document.getElementById('score-popup').classList.add('show');
 }
-
 window.closeScore = function() {
   document.getElementById('score-popup').classList.remove('show');
-  if (isHost) {
-    startNewBoard();
-  } else {
-    sendAction({ type:'request_deal' });
-  }
+  if(isHost) startNewBoard(); else sendToHost({type:'request_deal'});
 };
 
-// ── History ──
 window.toggleHistory = function() {
-  const panel = document.getElementById('history-panel');
-  panel.classList.toggle('show');
-  if (panel.classList.contains('show')) {
-    renderHistory();
-  }
+  const p=document.getElementById('history-panel'); p.classList.toggle('show');
+  if(p.classList.contains('show')) renderHistory();
 };
 
 function renderHistory() {
-  const list = document.getElementById('history-list');
-  if (state.history.length === 0) {
-    list.innerHTML = '<div style="color:var(--text-dim)">暂无记录</div>';
-    return;
+  const list=document.getElementById('history-list');
+  if(!state.history.length){list.innerHTML='<div style="color:var(--text-dim)">暂无记录</div>';return;}
+  let html='';
+  for(let i=state.history.length-1;i>=0;i--){
+    const h=state.history[i], cs=h.contract?formatContract(h.contract):'全Pass';
+    const ss=h.score>0?'+'+h.score:''+h.score;
+    let rs='';
+    if(h.contract){const m=h.declarerTricks-TRICKS_NEEDED[h.contract.level];rs=m>=0?(m===0?'恰好完成':'超'+m+'墩'):'宕'+(-m);}else rs='流局';
+    let hs='';
+    if(h.hands) for(let s of SEATS){const n=h.players[s]?h.players[s].name:SEAT_NAMES[s];hs+=SEAT_NAMES[s]+'('+n+'): '+h.hands[s].map(c=>SUIT_SYMBOLS[c.suit]+c.rank).join(' ')+'<br>';}
+    let as='';
+    if(h.auction&&h.auction.length) as=h.auction.map(a=>{if(a.bid==='Pass')return 'P';if(a.bid==='X'||a.bid==='XX')return a.bid;const su=a.bid.slice(1);return a.bid[0]+(su==='NT'?'NT':SUIT_SYMBOLS[su]);}).join('-');
+    html+='<div class="history-item"><div><span class="board-num">第 '+h.boardNum+' 局</span> · '+h.timestamp+'</div><div class="contract">'+cs+' · '+rs+'</div><div class="result">得分: <span style="color:'+(h.score>=0?'#2ecc71':'#e74c3c')+'">'+ss+'</span></div>'+(as?'<div class="hands-detail">叫牌: '+as+'</div>':'')+'<div class="hands-detail">'+hs+'</div></div>';
   }
-
-  let html = '';
-  for (let i = state.history.length - 1; i >= 0; i--) {
-    const h = state.history[i];
-    const contractStr = h.contract ? formatContract(h.contract) : '全Pass';
-    const scoreStr = h.score > 0 ? `+${h.score}` : `${h.score}`;
-
-    let resultStr = '';
-    if (h.contract) {
-      const needed = TRICKS_NEEDED[h.contract.level];
-      const made = h.declarerTricks - needed;
-      resultStr = made >= 0 ?
-        (made === 0 ? '恰好完成' : `超${made}墩`) :
-        `宕${-made}`;
-    } else {
-      resultStr = '流局';
-    }
-
-    // Format hands
-    let handsStr = '';
-    if (h.hands) {
-      for (let s of SEATS) {
-        const name = h.players[s] ? h.players[s].name : SEAT_NAMES[s];
-        const cards = h.hands[s].map(c => `${SUIT_SYMBOLS[c.suit]}${c.rank}`).join(' ');
-        handsStr += `${SEAT_NAMES[s]}(${name}): ${cards}<br>`;
-      }
-    }
-
-    // Format auction
-    let auctionStr = '';
-    if (h.auction && h.auction.length > 0) {
-      auctionStr = h.auction.map(a => {
-        if (a.bid === 'Pass') return 'P';
-        if (a.bid === 'X' || a.bid === 'XX') return a.bid;
-        const suit = a.bid.slice(1);
-        return a.bid[0] + (suit === 'NT' ? 'NT' : SUIT_SYMBOLS[suit]);
-      }).join('-');
-    }
-
-    html += `
-      <div class="history-item">
-        <div><span class="board-num">第 ${h.boardNum} 局</span> · ${h.timestamp}</div>
-        <div class="contract">${contractStr} · ${resultStr}</div>
-        <div class="result">得分: <span style="color:${h.score >= 0 ? '#2ecc71' : '#e74c3c'}">${scoreStr}</span></div>
-        ${auctionStr ? `<div class="hands-detail">叫牌: ${auctionStr}</div>` : ''}
-        <div class="hands-detail">${handsStr}</div>
-      </div>
-    `;
-  }
-  list.innerHTML = html;
+  list.innerHTML=html;
 }
-
 </script>
 </body>
 </html>
