@@ -499,7 +499,7 @@ body {
 
 <!-- Trystero via CDN -->
 <script type="module">
-import { joinRoom } from 'https://esm.sh/trystero/nostr';
+import { joinRoom, selfId } from 'https://esm.sh/@trystero-p2p/mqtt';
 
 // ══════════════════════════════════════════════
 // CONSTANTS
@@ -551,6 +551,15 @@ let isHost = false;
 // ══════════════════════════════════════════════
 // TRYSTERO SETUP
 // ══════════════════════════════════════════════
+function log(msg) {
+  console.log('[minibridge]', msg);
+  const bar = document.getElementById('info-bar');
+  if (bar && state.phase === 'waiting') {
+    // Show last log in info bar for debugging
+    bar.textContent = msg;
+  }
+}
+
 window.joinGame = function() {
   myName = document.getElementById('nickname').value.trim() || '玩家';
   const roomId = document.getElementById('room-id').value.trim();
@@ -561,13 +570,13 @@ window.joinGame = function() {
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('game').style.display = 'block';
 
-  room = joinRoom({ appId: 'minibridge-2026' }, roomId);
+  myPeerId = selfId;
+  log(`我的ID: ${myPeerId.slice(0,8)}... 正在连接房间 [${roomId}]`);
+
+  room = joinRoom({ appId: 'minibridge-2026-v2' }, roomId);
 
   [sendState, getState] = room.makeAction('state');
   [sendAction, getAction] = room.makeAction('action');
-
-  // Trystero sets selfId synchronously on joinRoom
-  myPeerId = room.selfId;
 
   // Register self locally
   if (mySeat) {
@@ -577,15 +586,22 @@ window.joinGame = function() {
 
   // ── Peer events ──
   room.onPeerJoin(peerId => {
-    console.log('[net] peer joined:', peerId);
-    // Send hello to the new peer (with slight delay for channel readiness)
-    setTimeout(() => {
-      sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
-    }, 300);
+    log(`发现玩家: ${peerId.slice(0,8)}...`);
+    // Send hello with increasing delays to ensure channel is ready
+    for (let delay of [200, 800, 2000]) {
+      setTimeout(() => {
+        try {
+          sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
+          log(`发送hello (${delay}ms) -> ${peerId.slice(0,8)}`);
+        } catch(e) {
+          log(`hello发送失败 (${delay}ms): ${e.message}`);
+        }
+      }, delay);
+    }
   });
 
   room.onPeerLeave(peerId => {
-    console.log('[net] peer left:', peerId);
+    log(`玩家离开: ${peerId.slice(0,8)}...`);
     for (let s of SEATS) {
       if (state.players[s] && state.players[s].peerId === peerId) {
         state.players[s] = null;
@@ -598,17 +614,16 @@ window.joinGame = function() {
 
   // ── Receive actions ──
   getAction((data, peerId) => {
+    log(`收到action: ${data.type} from ${peerId.slice(0,8)}`);
     handleAction(data, peerId);
   });
 
   // ── Receive state (from host) ──
   getState((data, peerId) => {
-    // Non-hosts accept state from host
+    log(`收到state from ${peerId.slice(0,8)}, phase=${data.phase}`);
     if (!isHost) {
-      // Preserve our local history
       const myHistory = state.history;
       state = data;
-      // Merge history
       if (myHistory.length > state.history.length) {
         state.history = myHistory;
       }
@@ -616,11 +631,9 @@ window.joinGame = function() {
     }
   });
 
-  // Assume host initially (if someone else is already host, they'll send state and we'll know)
   isHost = true;
 
-  updatePlayerLabels();
-  updateInfoBar();
+  renderAll();
   buildBidGrid();
 
   // Load history from localStorage
@@ -628,41 +641,50 @@ window.joinGame = function() {
   if (saved) {
     try { state.history = JSON.parse(saved); } catch(e) {}
   }
+
+  // Periodic status update
+  setInterval(() => {
+    if (state.phase === 'waiting') {
+      const peerCount = Object.keys(peers).length - 1;
+      const seated = SEATS.filter(s => state.players[s]).length;
+      const bar = document.getElementById('info-bar');
+      bar.textContent = `已连接 ${peerCount} 人 · 就座 ${seated}/4${mySeat ? ' · 你是' + SEAT_NAMES[mySeat] : ' · 旁观'}`;
+    }
+  }, 3000);
 };
 
-// Elect host: the peer with the lowest peerId among all connected becomes host
+// Elect host: lowest peerId
 function electHost() {
   const allIds = [myPeerId, ...Object.keys(peers).filter(id => id !== myPeerId)];
   allIds.sort();
   isHost = (allIds[0] === myPeerId);
-  console.log('[net] host election:', isHost ? 'I am host' : 'not host');
+  log(`host选举: ${isHost ? '我是host' : '我不是host'}`);
 }
 
 function handleAction(data, peerId) {
   if (data.type === 'hello') {
     const isNew = !peers[peerId];
     peers[peerId] = { seat: data.seat, name: data.name };
+    log(`握手: ${data.name}(${data.seat || '旁观'}) from ${peerId.slice(0,8)}`);
 
     if (data.seat && !state.players[data.seat]) {
       state.players[data.seat] = { peerId: data.peerId || peerId, name: data.name };
     } else if (data.seat && state.players[data.seat] && state.players[data.seat].peerId !== (data.peerId || peerId)) {
-      // Seat taken
       sendAction({ type:'seat_taken', seat: data.seat }, peerId);
     }
 
-    // Re-elect host with new peer set
     electHost();
 
-    // If I'm host, send full state to everyone after a moment
+    // Host sends full state
     if (isHost) {
-      setTimeout(() => broadcastState(), 400);
+      setTimeout(() => broadcastState(), 500);
     }
 
-    // If new peer, send hello back so they know about us too
+    // Reply hello if new
     if (isNew) {
       setTimeout(() => {
         sendAction({ type:'hello', seat: mySeat, name: myName, peerId: myPeerId }, peerId);
-      }, 200);
+      }, 300);
     }
 
     checkReady();
