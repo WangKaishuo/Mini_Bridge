@@ -3,1029 +3,150 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>小小桥牌 Mini Bridge</title>
+<title>小小桥牌</title>
 <style>
-:root {
-  --bg: #1a1f2e;
-  --bg2: #232a3b;
-  --bg3: #2c3548;
-  --card-bg: #f5f0e8;
-  --card-shadow: rgba(0,0,0,0.3);
-  --green: #2d7a4f;
-  --green-felt: #1b5e3b;
-  --gold: #d4a843;
-  --red: #c0392b;
-  --blue: #2980b9;
-  --text: #e8e4dc;
-  --text-dim: #8a8b90;
-  --accent: #e8c547;
-  --suit-spade: #1a1a2e;
-  --suit-heart: #c0392b;
-  --suit-diamond: #d4760a;
-  --suit-club: #27ae60;
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: 'Georgia', 'Noto Serif SC', serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-/* ── Lobby ── */
-#lobby {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-}
-#lobby h1 {
-  font-size: 2.4em;
-  color: var(--gold);
-  margin-bottom: 8px;
-  letter-spacing: 4px;
-}
-#lobby .subtitle {
-  color: var(--text-dim);
-  margin-bottom: 40px;
-  font-size: 0.95em;
-}
-#lobby .form-group {
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-#lobby label {
-  font-size: 0.85em;
-  color: var(--text-dim);
-}
-#lobby input, #lobby select {
-  padding: 10px 16px;
-  border: 1px solid var(--bg3);
-  border-radius: 6px;
-  background: var(--bg2);
-  color: var(--text);
-  font-size: 1em;
-  width: 260px;
-  outline: none;
-}
-#lobby input:focus { border-color: var(--gold); }
-#lobby button {
-  margin-top: 12px;
-  padding: 12px 40px;
-  background: var(--green);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 1.05em;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-#lobby button:hover { background: #35915d; }
-
-/* ── Game ── */
-#game { display:none; width:100vw; height:100vh; position:relative; }
-
-/* Table */
-.table-area {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: min(520px, 80vw);
-  height: min(520px, 80vw);
-  background: radial-gradient(ellipse at center, #2a7a50 0%, var(--green-felt) 70%, #14442a 100%);
-  border-radius: 24px;
-  border: 6px solid #3a2a1a;
-  box-shadow: 0 0 60px rgba(0,0,0,0.5), inset 0 0 40px rgba(0,0,0,0.2);
-}
-
-/* Played cards on table */
-.trick-area {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 200px; height: 200px;
-}
-.trick-card {
-  position: absolute;
-  width: 52px; height: 72px;
-  background: var(--card-bg);
-  border-radius: 5px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.8em; font-weight: bold;
-  box-shadow: 1px 2px 6px var(--card-shadow);
-  transition: all 0.3s;
-  flex-direction: column;
-  line-height: 1.1;
-}
-.trick-card.north { top: 0; left: 50%; transform: translateX(-50%); }
-.trick-card.south { bottom: 0; left: 50%; transform: translateX(-50%); }
-.trick-card.west { top: 50%; left: 0; transform: translateY(-50%); }
-.trick-card.east { top: 50%; right: 0; transform: translateY(-50%); }
-
-/* Player labels */
-.player-label {
-  position: absolute;
-  text-align: center;
-  font-size: 0.8em;
-  padding: 4px 12px;
-  border-radius: 4px;
-  background: rgba(0,0,0,0.5);
-  white-space: nowrap;
-}
-.player-label .name { color: var(--gold); font-weight: bold; }
-.player-label .tricks { color: var(--text-dim); font-size: 0.85em; }
-.player-label.active { box-shadow: 0 0 12px var(--accent); }
-.player-label.north { top: 6%; left: 50%; transform: translateX(-50%); }
-.player-label.south { bottom: 6%; left: 50%; transform: translateX(-50%); }
-.player-label.west { top: 50%; left: 6%; transform: translateY(-50%); }
-.player-label.east { top: 50%; right: 6%; transform: translateY(-50%); }
-
-/* Hand (cards) */
-.hand {
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  gap: 2px;
-}
-.hand.south { bottom: 8px; left: 50%; transform: translateX(-50%); }
-.hand.north { top: 8px; left: 50%; transform: translateX(-50%); }
-.hand.west { top: 50%; left: 8px; transform: translateY(-50%) rotate(90deg); }
-.hand.east { top: 50%; right: 8px; transform: translateY(-50%) rotate(-90deg); }
-
-.card {
-  width: 48px; height: 68px;
-  background: var(--card-bg);
-  border-radius: 5px;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  font-size: 0.75em; font-weight: bold;
-  cursor: default;
-  box-shadow: 1px 2px 4px var(--card-shadow);
-  transition: transform 0.15s, box-shadow 0.15s;
-  user-select: none;
-  line-height: 1.1;
-}
-.card.face-down {
-  background: linear-gradient(135deg, #3a5ba0, #2c4a85);
-  color: transparent;
-}
-.card.face-down::after {
-  content: '🂠';
-  font-size: 1.6em;
-  color: rgba(255,255,255,0.3);
-}
-.card.playable {
-  cursor: pointer;
-  border: 2px solid var(--accent);
-}
-.card.playable:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
-}
-.card .suit { font-size: 1.1em; }
-.card.suit-s, .card.suit-c { color: #1a1a2e; }
-.card.suit-h { color: var(--red); }
-.card.suit-d { color: var(--suit-diamond); }
-
-/* Bidding box */
-#bidding-box {
-  display: none;
-  position: absolute;
-  bottom: 90px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg2);
-  border: 1px solid var(--bg3);
-  border-radius: 10px;
-  padding: 12px;
-  z-index: 10;
-  max-width: 360px;
-}
-#bid-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.bid-btn {
-  padding: 6px 4px;
-  border: 1px solid var(--bg3);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.8em;
-  cursor: pointer;
-  text-align: center;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-.bid-btn:hover:not(:disabled) { background: var(--green); }
-.bid-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.bid-btn.pass-btn { background: #555; }
-.bid-btn.dbl-btn { background: #8e3b3b; }
-.bid-btn.rdbl-btn { background: #2b5ea0; }
-#bid-actions {
-  display: flex;
-  gap: 4px;
-  justify-content: center;
-}
-
-/* Auction display */
-#auction-display {
-  display: none;
-  position: absolute;
-  top: 12%;
-  right: 12px;
-  background: rgba(0,0,0,0.7);
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 0.75em;
-  max-height: 280px;
-  overflow-y: auto;
-  z-index: 5;
-  min-width: 180px;
-}
-#auction-display table {
-  border-collapse: collapse;
-  width: 100%;
-}
-#auction-display th {
-  color: var(--gold);
-  padding: 2px 8px;
-  border-bottom: 1px solid var(--bg3);
-}
-#auction-display td {
-  padding: 2px 8px;
-  text-align: center;
-}
-
-/* Info bar */
-#info-bar {
-  position: absolute;
-  top: 8px; left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  padding: 6px 20px;
-  border-radius: 20px;
-  font-size: 0.85em;
-  color: var(--accent);
-  z-index: 5;
-  white-space: nowrap;
-}
-
-/* Contract display */
-#contract-display {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 1.4em;
-  color: var(--gold);
-  font-weight: bold;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
-  z-index: 3;
-  pointer-events: none;
-}
-
-/* Score popup */
-#score-popup {
-  display: none;
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.7);
-  z-index: 100;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-#score-popup.show { display: flex; }
-#score-popup .content {
-  background: var(--bg2);
-  border: 2px solid var(--gold);
-  border-radius: 12px;
-  padding: 24px 32px;
-  text-align: center;
-  max-width: 400px;
-}
-#score-popup h2 { color: var(--gold); margin-bottom: 12px; }
-#score-popup .score-val { font-size: 2em; color: var(--accent); margin: 12px 0; }
-#score-popup button {
-  margin-top: 16px;
-  padding: 10px 30px;
-  background: var(--green);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1em;
-}
-
-/* History panel */
-#history-btn {
-  position: absolute;
-  top: 8px; right: 12px;
-  padding: 6px 14px;
-  background: var(--bg2);
-  border: 1px solid var(--bg3);
-  color: var(--text-dim);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8em;
-  z-index: 20;
-}
-#history-panel {
-  display: none;
-  position: fixed;
-  top: 0; right: 0;
-  width: min(400px, 90vw);
-  height: 100vh;
-  background: var(--bg);
-  border-left: 2px solid var(--bg3);
-  z-index: 50;
-  overflow-y: auto;
-  padding: 20px;
-}
-#history-panel.show { display: block; }
-#history-panel h2 {
-  color: var(--gold);
-  margin-bottom: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-#history-panel .close-btn {
-  cursor: pointer;
-  font-size: 1.4em;
-  color: var(--text-dim);
-  background: none;
-  border: none;
-}
-.history-item {
-  background: var(--bg2);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 10px;
-  font-size: 0.85em;
-}
-.history-item .board-num { color: var(--gold); font-weight: bold; }
-.history-item .contract { color: var(--accent); }
-.history-item .result { margin-top: 4px; }
-.history-item .hands-detail { margin-top: 6px; color: var(--text-dim); font-size: 0.9em; }
-
-/* Responsive */
-@media (max-width: 600px) {
-  .table-area { width: 92vw; height: 92vw; }
-  .card { width: 36px; height: 52px; font-size: 0.65em; }
-  .trick-card { width: 40px; height: 56px; font-size: 0.7em; }
-  #bidding-box { bottom: 70px; padding: 8px; max-width: 320px; }
-  .bid-btn { font-size: 0.7em; padding: 5px 2px; }
-  .player-label { font-size: 0.7em; }
-}
-
-/* Status bar at bottom */
-#status-bar {
-  position: absolute;
-  bottom: 8px; left: 50%;
-  transform: translateX(-50%);
-  display: flex; gap: 12px;
-  z-index: 5;
-}
-#status-bar button {
-  padding: 6px 16px;
-  background: var(--bg2);
-  border: 1px solid var(--bg3);
-  color: var(--text-dim);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8em;
-}
-#status-bar button:hover { background: var(--bg3); }
-
-.suit-symbol { font-weight: bold; }
-.suit-s { color: #1a1a2e; }
-.suit-h { color: var(--red); }
-.suit-d { color: var(--suit-diamond); }
-.suit-c { color: var(--suit-club); }
-/* in dark bg contexts */
-.dark-ctx .suit-s { color: #ccc; }
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap');
+:root{--bg:#0c1117;--bg2:#161d27;--bg3:#1e2836;--felt:#1a6b3c;--gold:#c9a84c;--text:#ddd8ce;--text2:#9a978f;--accent:#e2c44d;--red:#d94040;--card:#fffef8;--card-sh:rgba(0,0,0,.35)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
+#lobby{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:24px;gap:6px}
+#lobby h1{font-size:2em;color:var(--gold);letter-spacing:6px;margin-bottom:4px}
+.fg{display:flex;flex-direction:column;gap:4px;margin:6px 0}
+.fg label{font-size:.78em;color:var(--text2)}
+.fg input,.fg select{padding:9px 14px;border:1px solid var(--bg3);border-radius:6px;background:var(--bg2);color:var(--text);font-size:.95em;width:240px;outline:none}
+.fg input:focus{border-color:var(--gold)}
+#lobby button{margin-top:10px;padding:11px 36px;background:var(--felt);color:#fff;border:none;border-radius:6px;font-size:1em;cursor:pointer}
+#game{display:none;width:100vw;height:100dvh;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:center;gap:12px;padding:5px 12px;background:var(--bg2);border-bottom:1px solid var(--bg3);z-index:10;flex-shrink:0}
+.topbar .info{color:var(--accent);font-size:.8em;font-weight:600}
+.topbar .btn{padding:3px 10px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.75em}
+.topbar .btn:hover{background:#2a3548}
+.topbar .btn.go{background:var(--felt);color:#fff;border-color:var(--felt)}
+.mid{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.table{width:min(520px,86vw);aspect-ratio:1;position:relative;background:radial-gradient(ellipse at 50% 45%,#28884e,var(--felt) 60%,#134a2a 100%);border-radius:16px;border:4px solid #3a2f20;box-shadow:0 4px 40px rgba(0,0,0,.5),inset 0 0 30px rgba(0,0,0,.15);display:grid;grid-template-areas:". north ." "west center east" ". south .";grid-template-columns:minmax(48px,1fr) 2.5fr minmax(48px,1fr);grid-template-rows:minmax(44px,1fr) 2.2fr minmax(44px,1fr)}
+.pz{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;overflow:visible;min-width:0}
+.pz.north{grid-area:north}.pz.south{grid-area:south}.pz.west{grid-area:west}.pz.east{grid-area:east}
+.pz .lbl{font-size:.7em;padding:2px 8px;border-radius:3px;background:rgba(0,0,0,.4);white-space:nowrap;color:var(--gold);font-weight:600}
+.pz .lbl.on{box-shadow:0 0 8px var(--accent);background:rgba(0,0,0,.55)}
+.pz .tk{font-size:.6em;color:var(--text2)}
+.pz .cds{display:flex;gap:1px;justify-content:center;flex-wrap:nowrap}
+.pz.west .cds,.pz.east .cds{flex-direction:column;gap:0}
+.table-center{grid-area:center;position:relative;display:flex;align-items:center;justify-content:center}
+.tz{width:150px;height:130px;position:relative}
+.tc{position:absolute;width:42px;height:60px;background:var(--card);border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.68em;font-weight:700;box-shadow:1px 2px 4px var(--card-sh);line-height:1}
+.tc.n{top:0;left:50%;transform:translateX(-50%)}.tc.s{bottom:0;left:50%;transform:translateX(-50%)}.tc.w{top:50%;left:0;transform:translateY(-50%)}.tc.e{top:50%;right:0;transform:translateY(-50%)}
+.cl{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--gold);font-size:1em;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,.5);pointer-events:none;white-space:nowrap}
+.mc{width:26px;height:36px;border-radius:3px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-size:.55em;font-weight:700;line-height:1;flex-shrink:0;box-shadow:0 1px 2px var(--card-sh)}
+.mc.f{background:var(--card)}.mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)}
+.mc.b::after{content:'';display:block;width:12px;height:18px;border:1px solid rgba(255,255,255,.12);border-radius:2px}
+.mc.playable{border:2px solid var(--accent);cursor:pointer}
+.pz.west .mc,.pz.east .mc{width:34px;height:18px;flex-direction:row;gap:2px;font-size:.48em;margin:-3px 0}
+.pz.west .mc.b::after,.pz.east .mc.b::after{width:16px;height:8px}
+.btm{display:flex;align-items:flex-end;justify-content:center;gap:4px;padding:6px 8px 10px;background:var(--bg2);border-top:1px solid var(--bg3);flex-shrink:0;flex-wrap:wrap;min-height:56px}
+.myc{width:50px;height:72px;background:var(--card);border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.8em;font-weight:700;line-height:1.1;box-shadow:0 2px 6px var(--card-sh);cursor:default;transition:transform .12s;user-select:none}
+.myc.playable{cursor:pointer;border:2px solid var(--accent)}
+.myc.playable:hover{transform:translateY(-8px);box-shadow:0 6px 16px rgba(0,0,0,.4)}
+.myc .st{font-size:1.15em}
+.ss{color:#222}.sh{color:var(--red)}.sd{color:#d4760a}.sc{color:#1a7a42}
+#bidbox{display:none;position:fixed;bottom:86px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--bg3);border-radius:10px;padding:10px;z-index:20;width:min(320px,90vw)}
+#bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:6px}
+.bb{padding:7px 2px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.75em;cursor:pointer;text-align:center;font-weight:600}
+.bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.25;cursor:not-allowed}
+.bb.pass{background:#555}.bb.dbl{background:#8e3b3b}.bb.rdbl{background:#2b5ea0}
+#bact{display:flex;gap:4px;justify-content:center}
+#auc{display:none;position:absolute;top:42px;right:8px;background:rgba(0,0,0,.75);border-radius:6px;padding:6px 8px;font-size:.68em;z-index:5;max-height:180px;overflow-y:auto;min-width:140px}
+#auc table{border-collapse:collapse;width:100%}#auc th{color:var(--gold);padding:1px 5px;border-bottom:1px solid var(--bg3);font-weight:600}#auc td{padding:1px 5px;text-align:center}
+#spop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;align-items:center;justify-content:center}
+#spop.show{display:flex}
+#spop .bx{background:var(--bg2);border:2px solid var(--gold);border-radius:12px;padding:20px 28px;text-align:center;max-width:340px}
+#spop h2{color:var(--gold);margin-bottom:6px;font-size:1.05em}
+#spop .sv{font-size:1.8em;margin:8px 0;font-weight:700}
+#spop .dt{color:var(--text2);font-size:.82em}
+#spop button{margin-top:12px;padding:8px 24px;background:var(--felt);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.9em}
+#hp{display:none;position:fixed;top:0;right:0;width:min(360px,88vw);height:100dvh;background:var(--bg);border-left:2px solid var(--bg3);z-index:50;overflow-y:auto;padding:14px}
+#hp.show{display:block}
+#hp h2{color:var(--gold);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-size:1em}
+#hp .x{cursor:pointer;font-size:1.2em;color:var(--text2);background:none;border:none}
+.hi{background:var(--bg2);border-radius:6px;padding:10px;margin-bottom:8px;font-size:.78em}
+.hi .bn{color:var(--gold);font-weight:700}.hi .ct{color:var(--accent)}.hi .dt{margin-top:3px;color:var(--text2);font-size:.88em}
+@media(max-width:600px){.table{width:94vw}.myc{width:42px;height:60px;font-size:.7em}.mc{width:22px;height:30px;font-size:.48em}.pz.west .mc,.pz.east .mc{width:28px;height:15px;font-size:.42em;margin:-4px 0}.tc{width:36px;height:50px;font-size:.58em}.bb{font-size:.68em;padding:6px 1px}}
 </style>
 </head>
 <body>
-
-<!-- ═══ LOBBY ═══ -->
 <div id="lobby">
   <h1>♠ 小小桥牌 ♣</h1>
-
-  <div class="form-group">
-    <label>你的昵称</label>
-    <input type="text" id="nickname" placeholder="输入昵称" maxlength="12">
-  </div>
-  <div class="form-group">
-    <label>房间号</label>
-    <input type="text" id="room-id" placeholder="输入房间号" maxlength="20">
-  </div>
-  <div class="form-group">
-    <label>选择座位</label>
-    <select id="seat-select">
-      <option value="">旁观</option>
-      <option value="N">北 (North)</option>
-      <option value="E">东 (East)</option>
-      <option value="S">南 (South)</option>
-      <option value="W">西 (West)</option>
-    </select>
-  </div>
+  <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12"></div>
+  <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20"></div>
+  <div class="fg"><label>座位</label><select id="ss"><option value="">旁观</option><option value="N">北</option><option value="E">东</option><option value="S">南</option><option value="W">西</option></select></div>
   <button onclick="joinGame()">加入房间</button>
 </div>
-
-<!-- ═══ GAME ═══ -->
 <div id="game">
-  <div id="info-bar">等待连接...</div>
-  <button id="history-btn" onclick="toggleHistory()">📋 历史</button>
-  <button id="start-btn" onclick="manualStart()" style="position:absolute;top:8px;left:12px;padding:6px 14px;background:#2d7a4f;border:1px solid #3a9462;color:#fff;border-radius:6px;cursor:pointer;font-size:0.8em;z-index:20;display:none;">开始发牌</button>
-
-  <div class="table-area">
-    <!-- Player labels -->
-    <div class="player-label north" id="label-N"><span class="name" id="name-N">北 (空位)</span><br><span class="tricks" id="tricks-N"></span></div>
-    <div class="player-label south" id="label-S"><span class="name" id="name-S">南 (空位)</span><br><span class="tricks" id="tricks-S"></span></div>
-    <div class="player-label west" id="label-W"><span class="name" id="name-W">西 (空位)</span><br><span class="tricks" id="tricks-W"></span></div>
-    <div class="player-label east" id="label-E"><span class="name" id="name-E">东 (空位)</span><br><span class="tricks" id="tricks-E"></span></div>
-
-    <!-- Trick area -->
-    <div class="trick-area" id="trick-area"></div>
-
-    <!-- Contract display -->
-    <div id="contract-display"></div>
-  </div>
-
-  <!-- Hands -->
-  <div class="hand north" id="hand-N"></div>
-  <div class="hand south" id="hand-S"></div>
-  <div class="hand west" id="hand-W"></div>
-  <div class="hand east" id="hand-E"></div>
-
-  <!-- Bidding box -->
-  <div id="bidding-box">
-    <div id="bid-grid"></div>
-    <div id="bid-actions">
-      <button class="bid-btn pass-btn" onclick="makeBid('Pass')">Pass</button>
-      <button class="bid-btn dbl-btn" id="dbl-btn" onclick="makeBid('X')" disabled>X</button>
-      <button class="bid-btn rdbl-btn" id="rdbl-btn" onclick="makeBid('XX')" disabled>XX</button>
+  <div class="topbar"><button class="btn go" id="sbtn" style="display:none" onclick="manualStart()">开始发牌</button><span class="info" id="ib">连接中...</span><button class="btn" onclick="toggleHistory()">📋 历史</button></div>
+  <div class="mid">
+    <div class="table">
+      <div class="pz north"><div class="lbl" id="lN">北 (空位)</div><div class="cds" id="cN"></div><div class="tk" id="tN"></div></div>
+      <div class="pz west"><div class="lbl" id="lW">西 (空位)</div><div class="cds" id="cW"></div><div class="tk" id="tW"></div></div>
+      <div class="table-center"><div class="tz" id="tz"></div><div class="cl" id="cl"></div></div>
+      <div class="pz east"><div class="lbl" id="lE">东 (空位)</div><div class="cds" id="cE"></div><div class="tk" id="tE"></div></div>
+      <div class="pz south"><div class="lbl" id="lS">南 (空位)</div><div class="cds" id="cS"></div><div class="tk" id="tS"></div></div>
     </div>
+    <div id="auc"></div>
   </div>
-
-  <!-- Auction display -->
-  <div id="auction-display" class="dark-ctx"></div>
-
-  <!-- Score popup -->
-  <div id="score-popup">
-    <div class="content">
-      <h2 id="score-title">本局结果</h2>
-      <div id="score-detail"></div>
-      <div class="score-val" id="score-val"></div>
-      <button onclick="closeScore()">下一局</button>
-    </div>
-  </div>
-
-  <!-- History panel -->
-  <div id="history-panel">
-    <h2>历史记录 <button class="close-btn" onclick="toggleHistory()">×</button></h2>
-    <div id="history-list"></div>
-  </div>
+  <div class="btm" id="mh"></div>
+  <div id="bidbox"><div id="bidgrid"></div><div id="bact"><button class="bb pass" onclick="makeBid('Pass')">Pass</button><button class="bb dbl" id="db" onclick="makeBid('X')" disabled>X</button><button class="bb rdbl" id="rb" onclick="makeBid('XX')" disabled>XX</button></div></div>
+  <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
+  <div id="hp"><h2>历史记录<button class="x" onclick="toggleHistory()">×</button></h2><div id="hl"></div></div>
 </div>
-
-<!-- PeerJS CDN -->
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
 <script>
-// ══════════════════════════════════════════════
-// CONSTANTS
-// ══════════════════════════════════════════════
-const SUITS = ['C','D','H','S'];
-const SUIT_SYMBOLS = { S:'♠', H:'♥', D:'♦', C:'♣' };
-const SUIT_NAMES = { S:'黑桃', H:'红心', D:'方块', C:'梅花' };
-const RANKS = ['8','9','10','J','Q','K','A'];
-const SEATS = ['N','E','S','W'];
-const SEAT_NAMES = { N:'北', E:'东', S:'南', W:'西' };
-const BID_SUITS = ['C','D','H','S','NT'];
-const LEVELS = [1,2,3,4];
-const TRICKS_NEEDED = { 1:4, 2:5, 3:6, 4:7 };
-
-// ══════════════════════════════════════════════
-// GAME STATE
-// ══════════════════════════════════════════════
-let myPeerId = null;
-let mySeat = null;
-let myName = '';
-let peer = null;
-let conns = {};
-let isHost = false;
-let state = {
-  phase: 'waiting', dealer: 0,
-  hands: { N:[], E:[], S:[], W:[] },
-  players: { N:null, E:null, S:null, W:null },
-  auction: [], contract: null, currentTrick: [],
-  trickWins: { NS:0, EW:0 }, trickLead: null,
-  turnSeat: null, dummy: null, boardNum: 0,
-  history: [], allHands: null,
-};
-let peers = {};
-
-function log(msg) {
-  console.log('[minibridge]', msg);
-  const bar = document.getElementById('info-bar');
-  if (bar && state.phase === 'waiting') bar.textContent = msg;
-}
-
-// ══════════════════════════════════════════════
-// NETWORKING - PeerJS star topology
-// ══════════════════════════════════════════════
-function broadcast(msg, excludeId) {
-  const data = JSON.stringify(msg);
-  for (let id in conns) {
-    if (id !== excludeId && conns[id] && conns[id].open) {
-      try { conns[id].send(data); } catch(e) {}
-    }
-  }
-}
-
-function sendToHost(msg) {
-  const data = JSON.stringify(msg);
-  for (let id in conns) {
-    if (conns[id] && conns[id].open) {
-      try { conns[id].send(data); } catch(e) {}
-      return;
-    }
-  }
-}
-
-function setupConn(conn) {
-  const pid = conn.peer;
-  conns[pid] = conn;
-  conn.on('open', () => {
-    log('已连接: ' + pid.slice(0,12));
-    conn.send(JSON.stringify({ type:'hello', seat:mySeat, name:myName }));
-    if (isHost) {
-      setTimeout(() => {
-        if (conn.open) conn.send(JSON.stringify({ type:'full_state', state:state }));
-      }, 500);
-    }
-  });
-  conn.on('data', raw => {
-    let d; try { d = JSON.parse(raw); } catch(e) { return; }
-    onMessage(d, pid);
-  });
-  conn.on('close', () => {
-    log('断开: ' + pid.slice(0,12));
-    delete conns[pid];
-    for (let s of SEATS) {
-      if (state.players[s] && state.players[s].peerId === pid) state.players[s] = null;
-    }
-    delete peers[pid];
-    renderAll();
-  });
-  conn.on('error', e => log('连接错误: ' + e.type));
-}
-
-function onMessage(d, fromId) {
-  if (d.type === 'hello') {
-    peers[fromId] = { seat:d.seat, name:d.name };
-    log('玩家加入: ' + d.name + ' (' + (d.seat ? SEAT_NAMES[d.seat] : '旁观') + ')');
-    if (d.seat && !state.players[d.seat]) {
-      state.players[d.seat] = { peerId:fromId, name:d.name };
-    } else if (d.seat && state.players[d.seat] && state.players[d.seat].peerId !== fromId) {
-      if (conns[fromId] && conns[fromId].open)
-        conns[fromId].send(JSON.stringify({ type:'seat_taken', seat:d.seat }));
-      return;
-    }
-    if (isHost) {
-      broadcast({ type:'peer_joined', seat:d.seat, name:d.name, peerId:fromId }, fromId);
-      setTimeout(() => broadcastState(), 300);
-    }
-    checkReady();
-    renderAll();
-  }
-  else if (d.type === 'peer_joined') {
-    peers[d.peerId] = { seat:d.seat, name:d.name };
-    if (d.seat && !state.players[d.seat]) state.players[d.seat] = { peerId:d.peerId, name:d.name };
-    renderAll();
-  }
-  else if (d.type === 'full_state') {
-    if (!isHost) {
-      const h = state.history;
-      state = d.state;
-      if (h.length > state.history.length) state.history = h;
-      renderAll();
-    }
-  }
-  else if (d.type === 'bid') {
-    if (isHost && state.phase === 'bidding' && d.seat === state.turnSeat) processBid(d.seat, d.bid);
-  }
-  else if (d.type === 'play_card') {
-    if (isHost && state.phase === 'playing' && d.seat === state.turnSeat) processPlayCard(d.seat, d.card);
-  }
-  else if (d.type === 'request_deal') {
-    if (isHost) startNewBoard();
-  }
-  else if (d.type === 'seat_taken') {
-    alert('座位 ' + SEAT_NAMES[d.seat] + ' 已被占用！');
-    mySeat = null; renderAll();
-  }
-}
-
-function broadcastState() {
-  if (!isHost) return;
-  broadcast({ type:'full_state', state:state });
-}
-
-// ══════════════════════════════════════════════
-// JOIN
-// ══════════════════════════════════════════════
-window.joinGame = function() {
-  myName = document.getElementById('nickname').value.trim() || '玩家';
-  const roomId = document.getElementById('room-id').value.trim();
-  mySeat = document.getElementById('seat-select').value || null;
-  if (!roomId) { alert('请输入房间号'); return; }
-
-  document.getElementById('lobby').style.display = 'none';
-  document.getElementById('game').style.display = 'block';
-
-  const hostId = 'mb-' + roomId.replace(/[^a-zA-Z0-9_-]/g, '');
-  log('正在连接房间 ' + roomId + '...');
-
-  // Try to be host
-  peer = new Peer(hostId);
-
-  peer.on('open', id => {
-    myPeerId = id;
-    isHost = true;
-    log('你是房主 · 等待其他玩家加入');
-    if (mySeat) state.players[mySeat] = { peerId:myPeerId, name:myName };
-    peers[myPeerId] = { seat:mySeat, name:myName };
-    renderAll();
-    buildBidGrid();
-  });
-
-  peer.on('connection', conn => {
-    log('有玩家正在连接...');
-    setupConn(conn);
-  });
-
-  peer.on('error', err => {
-    if (err.type === 'unavailable-id') {
-      // Host exists, join as client
-      peer.destroy();
-      peer = new Peer();
-      peer.on('open', id => {
-        myPeerId = id;
-        isHost = false;
-        log('正在加入房间...');
-        if (mySeat) state.players[mySeat] = { peerId:myPeerId, name:myName };
-        peers[myPeerId] = { seat:mySeat, name:myName };
-        const conn = peer.connect(hostId, { reliable:true });
-        setupConn(conn);
-        renderAll();
-        buildBidGrid();
-      });
-      peer.on('error', e2 => log('连接失败: ' + e2.type));
-    } else {
-      log('错误: ' + err.type);
-    }
-  });
-
-  // Load history
-  const saved = localStorage.getItem('minibridge-history');
-  if (saved) { try { state.history = JSON.parse(saved); } catch(e) {} }
-};
-
-// ══════════════════════════════════════════════
-// GAME LOGIC
-// ══════════════════════════════════════════════
-function checkReady() {
-  if (SEATS.filter(s => state.players[s]).length === 4 && state.phase === 'waiting') startNewBoard();
-}
-
-function startNewBoard() {
-  state.boardNum++;
-  state.dealer = (state.dealer + (state.boardNum > 1 ? 1 : 0)) % 4;
-  state.phase = 'bidding'; state.auction = []; state.contract = null;
-  state.currentTrick = []; state.trickWins = { NS:0, EW:0 };
-  state.trickLead = null; state.dummy = null;
-  state.turnSeat = SEATS[state.dealer];
-  const deck = [];
-  for (let s of SUITS) for (let r of RANKS) deck.push({ suit:s, rank:r });
-  shuffle(deck);
-  state.hands = { N:deck.slice(0,7), E:deck.slice(7,14), S:deck.slice(14,21), W:deck.slice(21,28) };
-  for (let s of SEATS) state.hands[s].sort((a,b) => {
-    const si = SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit);
-    return si !== 0 ? si : RANKS.indexOf(a.rank) - RANKS.indexOf(b.rank);
-  });
-  state.allHands = JSON.parse(JSON.stringify(state.hands));
-  renderAll(); broadcastState();
-}
-
-function shuffle(a) { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} }
-
-function getLastContractBid() {
-  for (let i=state.auction.length-1;i>=0;i--) {
-    const b=state.auction[i].bid;
-    if(b!=='Pass'&&b!=='X'&&b!=='XX') return {...state.auction[i],index:i};
-  }
-  return null;
-}
-function bidToValue(bid) {
-  if(bid==='Pass'||bid==='X'||bid==='XX') return -1;
-  return parseInt(bid[0])*10+BID_SUITS.indexOf(bid.slice(1));
-}
-function isValidBid(seat,bid) {
-  if(bid==='Pass') return true;
-  const lc=getLastContractBid();
-  if(bid==='X') {
-    if(!lc) return false;
-    if((SEATS.indexOf(seat)%2)===(SEATS.indexOf(lc.seat)%2)) return false;
-    for(let i=lc.index+1;i<state.auction.length;i++) if(state.auction[i].bid==='X'||state.auction[i].bid==='XX') return false;
-    for(let i=lc.index+1;i<state.auction.length;i++) if(state.auction[i].bid!=='Pass') return false;
-    return true;
-  }
-  if(bid==='XX') {
-    let lastX=-1;
-    for(let i=state.auction.length-1;i>=0;i--){if(state.auction[i].bid==='X'){lastX=i;break;}if(state.auction[i].bid!=='Pass')break;}
-    if(lastX===-1) return false;
-    return (SEATS.indexOf(seat)%2)!==(SEATS.indexOf(state.auction[lastX].seat)%2);
-  }
-  return lc ? bidToValue(bid)>bidToValue(lc.bid) : true;
-}
-
-function processBid(seat,bid) {
-  state.auction.push({seat,bid});
-  const a=state.auction;
-  if(a.length>=4) {
-    if(a.slice(-3).every(x=>x.bid==='Pass')&&a.length>3&&a.some(x=>x.bid!=='Pass'&&x.bid!=='X'&&x.bid!=='XX')) { finalizeAuction(); return; }
-    if(a.slice(-4).every(x=>x.bid==='Pass')) { state.phase='scoring'; state.contract=null; recordBoard(0,null); renderAll(); broadcastState(); showScore('全Pass','本局流局',0); return; }
-  }
-  state.turnSeat=SEATS[(SEATS.indexOf(seat)+1)%4];
-  renderAll(); broadcastState();
-}
-
-function finalizeAuction() {
-  const lc=getLastContractBid(), bid=lc.bid, level=parseInt(bid[0]), suit=bid.slice(1);
-  const side=SEATS.indexOf(lc.seat)%2;
-  let declarer=null;
-  for(let a of state.auction) { if(a.bid!=='Pass'&&a.bid!=='X'&&a.bid!=='XX'&&a.bid.slice(1)===suit&&SEATS.indexOf(a.seat)%2===side) { declarer=a.seat; break; } }
-  let doubled=false, redoubled=false;
-  for(let i=state.auction.length-1;i>=0;i--) { if(state.auction[i].bid==='XX'){redoubled=true;break;} if(state.auction[i].bid==='X'){doubled=true;break;} if(state.auction[i].bid!=='Pass')break; }
-  state.contract={level,suit,doubled,redoubled,declarer};
-  const di=SEATS.indexOf(declarer);
-  state.dummy=SEATS[(di+2)%4]; state.trickLead=SEATS[(di+1)%4];
-  state.turnSeat=state.trickLead; state.phase='playing'; state.currentTrick=[];
-  renderAll(); broadcastState();
-}
-
-function processPlayCard(seat,card) {
-  const hand=state.hands[seat];
-  const idx=hand.findIndex(c=>c.suit===card.suit&&c.rank===card.rank);
-  if(idx===-1) return;
-  hand.splice(idx,1);
-  state.currentTrick.push({seat,card});
-  if(state.currentTrick.length===4) {
-    const winner=determineTrickWinner(state.currentTrick,state.contract.suit);
-    const ws=(SEATS.indexOf(winner)%2===0)?'NS':'EW'; state.trickWins[ws]++;
-    renderAll(); broadcastState();
-    setTimeout(()=>{
-      state.currentTrick=[]; state.trickLead=winner; state.turnSeat=winner;
-      if(state.trickWins.NS+state.trickWins.EW===7) endPlay();
-      else { renderAll(); broadcastState(); }
-    },1200);
-    return;
-  }
-  state.turnSeat=SEATS[(SEATS.indexOf(seat)+1)%4];
-  renderAll(); broadcastState();
-}
-
-function determineTrickWinner(trick,trumpSuit) {
-  const leadSuit=trick[0].card.suit; let best=trick[0];
-  for(let i=1;i<trick.length;i++) {
-    const c=trick[i];
-    if(trumpSuit!=='NT') {
-      if(c.card.suit===trumpSuit&&best.card.suit!==trumpSuit) best=c;
-      else if(c.card.suit===trumpSuit&&best.card.suit===trumpSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
-      else if(c.card.suit===leadSuit&&best.card.suit===leadSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
-    } else {
-      if(c.card.suit===leadSuit&&best.card.suit===leadSuit&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank)) best=c;
-    }
-  }
-  return best.seat;
-}
-
-function endPlay() {
-  state.phase='scoring';
-  const c=state.contract, ds=(SEATS.indexOf(c.declarer)%2===0)?'NS':'EW';
-  const dt=state.trickWins[ds], needed=TRICKS_NEEDED[c.level], made=dt-needed;
-  const score=calculateScore(c,made);
-  recordBoard(score,c,dt); renderAll(); broadcastState();
-  const rs=made>=0?(made===0?'恰好完成':'超 '+made+' 墩'):'宕 '+(-made);
-  showScore(formatContract(c),'庄家: '+SEAT_NAMES[c.declarer]+' | '+rs+' | 赢墩: '+dt+'/7',score);
-}
-
-function calculateScore(contract,made) {
-  const{level,suit,doubled,redoubled}=contract;
-  if(made>=0) {
-    let tp=suit==='NT'?30+(level-1)*20:level*20;
-    let dm=1; if(doubled)dm=2; if(redoubled)dm=4; tp*=dm;
-    const isGame=tp>=50, isSlam=level===4;
-    let bonus=50; if(isGame)bonus=250; if(isSlam)bonus=750;
-    let eb=0; if(doubled)eb+=100; if(redoubled)eb+=200;
-    let ot=0;
-    if(made>0){if(!doubled&&!redoubled)ot=made*20;else if(doubled)ot=made*100;else ot=made*200;}
-    return tp+bonus+eb+ot;
-  } else {
-    const down=-made;
-    if(!doubled&&!redoubled) return -(down*50);
-    if(doubled){let p=0;if(down>=1)p+=100;if(down>=2)p+=200;if(down>=3)p+=200;for(let i=4;i<=down;i++)p+=300;return -p;}
-    let p=0;if(down>=1)p+=200;if(down>=2)p+=400;if(down>=3)p+=400;for(let i=4;i<=down;i++)p+=600;return -p;
-  }
-}
-
-function recordBoard(score,contract,dt) {
-  state.history.push({boardNum:state.boardNum,hands:state.allHands,auction:[...state.auction],
-    contract:contract?{...contract}:null,declarerTricks:dt||0,score,
-    players:JSON.parse(JSON.stringify(state.players)),timestamp:new Date().toLocaleString('zh-CN')});
-  localStorage.setItem('minibridge-history',JSON.stringify(state.history));
-}
-
-// ══════════════════════════════════════════════
-// RENDERING
-// ══════════════════════════════════════════════
-function renderAll() {
-  updatePlayerLabels(); updateInfoBar(); renderHands(); renderTrick(); renderAuction(); renderContract(); updateBiddingBox();
-  const sb=document.getElementById('start-btn');
-  if(sb){const c=SEATS.filter(s=>state.players[s]).length; sb.style.display=(state.phase==='waiting'&&isHost&&c>=2)?'block':'none';}
-}
-
-window.manualStart = function() {
-  if(isHost&&state.phase==='waiting'){
-    for(let s of SEATS) if(!state.players[s]) state.players[s]={peerId:'bot-'+s,name:'机器人'+SEAT_NAMES[s]};
-    startNewBoard();
-  }
-};
-
-function updatePlayerLabels() {
-  for(let s of SEATS){
-    document.getElementById('name-'+s).textContent=state.players[s]?SEAT_NAMES[s]+' '+state.players[s].name:SEAT_NAMES[s]+' (空位)';
-    document.getElementById('label-'+s).classList.toggle('active',state.turnSeat===s);
-    const t=document.getElementById('tricks-'+s);
-    if(state.phase==='playing'||state.phase==='scoring'){const sd=(SEATS.indexOf(s)%2===0)?'NS':'EW';t.textContent='墩数: '+state.trickWins[sd];}else t.textContent='';
-  }
-}
-
-function updateInfoBar() {
-  const bar=document.getElementById('info-bar');
-  const pc=Object.keys(peers).length-1;
-  if(state.phase==='waiting'){
-    const c=SEATS.filter(s=>state.players[s]).length;
-    bar.textContent=(pc>0?'已连接'+pc+'人':'等待连接...')+' · 就座 '+c+'/4'+(mySeat?' · 你是'+SEAT_NAMES[mySeat]:' · 旁观');
-  }else if(state.phase==='bidding') bar.textContent='第 '+state.boardNum+' 局 · 叫牌中 · 轮到 '+SEAT_NAMES[state.turnSeat];
-  else if(state.phase==='playing') bar.textContent='第 '+state.boardNum+' 局 · '+formatContract(state.contract)+' · 轮到 '+SEAT_NAMES[state.turnSeat];
-  else bar.textContent='第 '+state.boardNum+' 局 · 结束';
-}
-
-function renderHands() {
-  for(let s of SEATS){
-    const el=document.getElementById('hand-'+s); el.innerHTML='';
-    const hand=state.hands[s]||[];
-    const canSee=(s===mySeat)||(state.phase==='playing'&&s===state.dummy)||(state.phase==='scoring')||(!mySeat);
-    const isMyTurn=state.turnSeat===s&&state.phase==='playing';
-    const canIPlay=(s===mySeat)||(mySeat&&s===state.dummy&&state.contract&&state.contract.declarer===mySeat);
-    for(let card of hand){
-      const div=document.createElement('div');
-      div.className='card suit-'+card.suit.toLowerCase();
-      if(canSee) div.innerHTML='<span class="suit">'+SUIT_SYMBOLS[card.suit]+'</span><span>'+card.rank+'</span>';
-      else div.classList.add('face-down');
-      if(isMyTurn&&canIPlay&&canSee&&isLegalPlay(s,card)){
-        div.classList.add('playable');
-        div.onclick=(function(st,cd){return function(){
-          if(isHost) processPlayCard(st,cd);
-          else sendToHost({type:'play_card',seat:st,card:cd});
-        };})(s,card);
-      }
-      el.appendChild(div);
-    }
-  }
-}
-
-function isLegalPlay(seat,card) {
-  if(state.currentTrick.length===0) return true;
-  const ls=state.currentTrick[0].card.suit;
-  if(card.suit===ls) return true;
-  return !state.hands[seat].some(c=>c.suit===ls);
-}
-
-function renderTrick() {
-  const area=document.getElementById('trick-area'); area.innerHTML='';
-  const pm={N:'north',E:'east',S:'south',W:'west'};
-  for(let p of state.currentTrick){
-    const div=document.createElement('div');
-    div.className='trick-card '+pm[p.seat];
-    const sc=getSuitColor(p.card.suit);
-    div.innerHTML='<span style="color:'+sc+';font-size:1.2em">'+SUIT_SYMBOLS[p.card.suit]+'</span><span style="color:#333">'+p.card.rank+'</span>';
-    area.appendChild(div);
-  }
-}
-
-function getSuitColor(s){return s==='H'?'#c0392b':s==='D'?'#d4760a':s==='S'?'#1a1a2e':'#27ae60';}
-function getSuitColorDark(s){return s==='H'?'#e74c3c':s==='D'?'#e67e22':s==='S'?'#ccc':'#2ecc71';}
-
-function renderAuction() {
-  const el=document.getElementById('auction-display');
-  if(state.auction.length===0&&state.phase!=='bidding'){el.style.display='none';return;}
-  if(state.phase==='bidding'||state.phase==='playing') el.style.display='block'; else{el.style.display='none';return;}
-  let h='<table><tr>';
-  for(let i=0;i<4;i++) h+='<th>'+SEAT_NAMES[SEATS[(state.dealer+i)%4]]+'</th>';
-  h+='</tr><tr>';
-  for(let i=0;i<state.auction.length;i++){h+='<td>'+formatBidCell(state.auction[i].bid)+'</td>';if((i+1)%4===0)h+='</tr><tr>';}
-  h+='</tr></table>'; el.innerHTML=h;
-}
-function formatBidCell(bid) {
-  if(bid==='Pass') return '<span style="color:#888">Pass</span>';
-  if(bid==='X') return '<span style="color:#e74c3c">X</span>';
-  if(bid==='XX') return '<span style="color:#3498db">XX</span>';
-  const s=bid.slice(1); if(s==='NT') return bid[0]+'NT';
-  return bid[0]+'<span style="color:'+getSuitColorDark(s)+'">'+SUIT_SYMBOLS[s]+'</span>';
-}
-
-function renderContract() {
-  const el=document.getElementById('contract-display');
-  el.textContent=(state.contract&&state.phase==='playing')?formatContract(state.contract):'';
-}
-function formatContract(c) {
-  if(!c) return '';
-  let s=c.level+(c.suit==='NT'?'NT':SUIT_SYMBOLS[c.suit]);
-  if(c.redoubled)s+='XX';else if(c.doubled)s+='X';
-  return s+' '+SEAT_NAMES[c.declarer];
-}
-
-function updateBiddingBox() {
-  const box=document.getElementById('bidding-box');
-  if(state.phase!=='bidding'||state.turnSeat!==mySeat){box.style.display='none';return;}
-  box.style.display='block';
-  document.querySelectorAll('.bid-btn[data-bid]').forEach(b=>{b.disabled=!isValidBid(mySeat,b.dataset.bid);});
-  document.getElementById('dbl-btn').disabled=!isValidBid(mySeat,'X');
-  document.getElementById('rdbl-btn').disabled=!isValidBid(mySeat,'XX');
-}
-
-function buildBidGrid() {
-  const g=document.getElementById('bid-grid'); g.innerHTML='';
-  for(let l of LEVELS) for(let s of BID_SUITS){
-    const bid=l+s,btn=document.createElement('button');
-    btn.className='bid-btn'; btn.dataset.bid=bid;
-    btn.innerHTML=s==='NT'?l+'NT':l+SUIT_SYMBOLS[s];
-    btn.onclick=()=>makeBid(bid); g.appendChild(btn);
-  }
-}
-
-window.makeBid = function(bid) {
-  if(!mySeat||state.turnSeat!==mySeat||!isValidBid(mySeat,bid)) return;
-  if(isHost) processBid(mySeat,bid);
-  else sendToHost({type:'bid',seat:mySeat,bid:bid});
-};
-
-function showScore(title,detail,score) {
-  document.getElementById('score-title').textContent=title;
-  document.getElementById('score-detail').textContent=detail;
-  const sv=document.getElementById('score-val');
-  sv.textContent=score===0?'—':(score>0?'+'+score:''+score);
-  sv.style.color=score>=0?'#2ecc71':'#e74c3c';
-  document.getElementById('score-popup').classList.add('show');
-}
-window.closeScore = function() {
-  document.getElementById('score-popup').classList.remove('show');
-  if(isHost) startNewBoard(); else sendToHost({type:'request_deal'});
-};
-
-window.toggleHistory = function() {
-  const p=document.getElementById('history-panel'); p.classList.toggle('show');
-  if(p.classList.contains('show')) renderHistory();
-};
-
-function renderHistory() {
-  const list=document.getElementById('history-list');
-  if(!state.history.length){list.innerHTML='<div style="color:var(--text-dim)">暂无记录</div>';return;}
-  let html='';
-  for(let i=state.history.length-1;i>=0;i--){
-    const h=state.history[i], cs=h.contract?formatContract(h.contract):'全Pass';
-    const ss=h.score>0?'+'+h.score:''+h.score;
-    let rs='';
-    if(h.contract){const m=h.declarerTricks-TRICKS_NEEDED[h.contract.level];rs=m>=0?(m===0?'恰好完成':'超'+m+'墩'):'宕'+(-m);}else rs='流局';
-    let hs='';
-    if(h.hands) for(let s of SEATS){const n=h.players[s]?h.players[s].name:SEAT_NAMES[s];hs+=SEAT_NAMES[s]+'('+n+'): '+h.hands[s].map(c=>SUIT_SYMBOLS[c.suit]+c.rank).join(' ')+'<br>';}
-    let as='';
-    if(h.auction&&h.auction.length) as=h.auction.map(a=>{if(a.bid==='Pass')return 'P';if(a.bid==='X'||a.bid==='XX')return a.bid;const su=a.bid.slice(1);return a.bid[0]+(su==='NT'?'NT':SUIT_SYMBOLS[su]);}).join('-');
-    html+='<div class="history-item"><div><span class="board-num">第 '+h.boardNum+' 局</span> · '+h.timestamp+'</div><div class="contract">'+cs+' · '+rs+'</div><div class="result">得分: <span style="color:'+(h.score>=0?'#2ecc71':'#e74c3c')+'">'+ss+'</span></div>'+(as?'<div class="hands-detail">叫牌: '+as+'</div>':'')+'<div class="hands-detail">'+hs+'</div></div>';
-  }
-  list.innerHTML=html;
-}
+const SU=['C','D','H','S'],SY={S:'♠',H:'♥',D:'♦',C:'♣'},RANKS=['8','9','10','J','Q','K','A'];
+const SE=['N','E','S','W'],SN={N:'北',E:'东',S:'南',W:'西'},BS=['C','D','H','S','NT'],LV=[1,2,3,4],TN={1:4,2:5,3:6,4:7};
+let myId=Math.random().toString(36).slice(2,10),mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null,peers={};
+let S={phase:'waiting',dealer:0,hands:{N:[],E:[],S:[],W:[]},players:{N:null,E:null,S:null,W:null},auction:[],contract:null,currentTrick:[],trickWins:{NS:0,EW:0},trickLead:null,turnSeat:null,dummy:null,boardNum:0,history:[],allHands:null};
+function log(m){console.log('[mb]',m);if(S.phase==='waiting'){const b=document.getElementById('ib');if(b)b.textContent=m;}}
+function sc(s){return s==='H'?'sh':s==='D'?'sd':s==='S'?'ss':'sc';}
+function scd(s){return s==='H'?'#e74c3c':s==='D'?'#e67e22':s==='S'?'#bbb':'#2ecc71';}
+function ms(msg){if(mq&&mq.connected){msg._from=myId;mq.publish(rt,JSON.stringify(msg));}}
+function onM(_,p){let d;try{d=JSON.parse(p.toString());}catch(e){return;}if(d._from===myId)return;
+if(d.type==='hello'){peers[d._from]={seat:d.seat,name:d.name};log('玩家加入: '+d.name);if(d.seat&&!S.players[d.seat])S.players[d.seat]={peerId:d._from,name:d.name};eH();if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),500);cR();rA();}
+else if(d.type==='full_state'){if(d._from===hostId&&!isHost){const h=S.history;S=d.state;if(h.length>S.history.length)S.history=h;rA();}}
+else if(d.type==='bid'){if(isHost&&S.phase==='bidding'&&d.seat===S.turnSeat)pB(d.seat,d.bid);}
+else if(d.type==='play_card'){if(isHost&&S.phase==='playing'&&d.seat===S.turnSeat)pC(d.seat,d.card);}
+else if(d.type==='request_deal'){if(isHost)sNB();}
+else if(d.type==='ping'){peers[d._from]=peers[d._from]||{seat:d.seat,name:d.name};}}
+function eH(){const a=[myId,...Object.keys(peers)];a.sort();hostId=a[0];isHost=hostId===myId;}
+function bS(){if(isHost)ms({type:'full_state',state:S});}
+window.joinGame=function(){myName=document.getElementById('nn').value.trim()||'玩家';const rid=document.getElementById('rid').value.trim();mySeat=document.getElementById('ss').value||null;if(!rid){alert('请输入房间号');return;}document.getElementById('lobby').style.display='none';document.getElementById('game').style.display='flex';rt='minibridge/room/'+rid;log('正在连接...');mq=mqtt.connect('wss://broker.hivemq.com:8884/mqtt',{clientId:'mb_'+myId,clean:true,keepalive:30,reconnectPeriod:3000});mq.on('connect',()=>{mq.subscribe(rt,e=>{if(e){log('订阅失败');return;}log('已加入房间 '+rid);if(mySeat)S.players[mySeat]={peerId:myId,name:myName};peers[myId]={seat:mySeat,name:myName};eH();ms({type:'hello',seat:mySeat,name:myName});rA();bBG();});});mq.on('message',onM);mq.on('error',e=>log('错误: '+e.message));mq.on('reconnect',()=>log('重连中...'));setInterval(()=>{if(mq&&mq.connected)ms({type:'ping',seat:mySeat,name:myName});},15000);const sv=localStorage.getItem('minibridge-history');if(sv)try{S.history=JSON.parse(sv);}catch(e){}};
+function cR(){if(SE.filter(s=>S.players[s]).length===4&&S.phase==='waiting')sNB();}
+function sNB(){S.boardNum++;S.dealer=(S.dealer+(S.boardNum>1?1:0))%4;S.phase='bidding';S.auction=[];S.contract=null;S.currentTrick=[];S.trickWins={NS:0,EW:0};S.trickLead=null;S.dummy=null;S.turnSeat=SE[S.dealer];const dk=[];for(let s of SU)for(let r of RANKS)dk.push({suit:s,rank:r});for(let i=dk.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[dk[i],dk[j]]=[dk[j],dk[i]];}S.hands={N:dk.slice(0,7),E:dk.slice(7,14),S:dk.slice(14,21),W:dk.slice(21,28)};for(let s of SE)S.hands[s].sort((a,b)=>{const d=SU.indexOf(a.suit)-SU.indexOf(b.suit);return d?d:RANKS.indexOf(a.rank)-RANKS.indexOf(b.rank);});S.allHands=JSON.parse(JSON.stringify(S.hands));rA();bS();}
+function gLC(){for(let i=S.auction.length-1;i>=0;i--){const b=S.auction[i].bid;if(b!=='Pass'&&b!=='X'&&b!=='XX')return{...S.auction[i],index:i};}return null;}
+function bv(b){if(b==='Pass'||b==='X'||b==='XX')return-1;return parseInt(b[0])*10+BS.indexOf(b.slice(1));}
+function iV(seat,bid){if(bid==='Pass')return true;const lc=gLC();if(bid==='X'){if(!lc)return false;if((SE.indexOf(seat)%2)===(SE.indexOf(lc.seat)%2))return false;for(let i=lc.index+1;i<S.auction.length;i++)if(S.auction[i].bid==='X'||S.auction[i].bid==='XX')return false;for(let i=lc.index+1;i<S.auction.length;i++)if(S.auction[i].bid!=='Pass')return false;return true;}if(bid==='XX'){let x=-1;for(let i=S.auction.length-1;i>=0;i--){if(S.auction[i].bid==='X'){x=i;break;}if(S.auction[i].bid!=='Pass')break;}if(x===-1)return false;return(SE.indexOf(seat)%2)!==(SE.indexOf(S.auction[x].seat)%2);}return lc?bv(bid)>bv(lc.bid):true;}
+function pB(seat,bid){S.auction.push({seat,bid});const a=S.auction;if(a.length>=4){if(a.slice(-3).every(x=>x.bid==='Pass')&&a.length>3&&a.some(x=>x.bid!=='Pass'&&x.bid!=='X'&&x.bid!=='XX')){fA();return;}if(a.slice(-4).every(x=>x.bid==='Pass')){S.phase='scoring';S.contract=null;rB(0,null);rA();bS();sS('全Pass','本局流局',0);return;}}S.turnSeat=SE[(SE.indexOf(seat)+1)%4];rA();bS();}
+function fA(){const lc=gLC(),bid=lc.bid,lv=parseInt(bid[0]),su=bid.slice(1),side=SE.indexOf(lc.seat)%2;let dec=null;for(let a of S.auction)if(a.bid!=='Pass'&&a.bid!=='X'&&a.bid!=='XX'&&a.bid.slice(1)===su&&SE.indexOf(a.seat)%2===side){dec=a.seat;break;}let db=false,rd=false;for(let i=S.auction.length-1;i>=0;i--){if(S.auction[i].bid==='XX'){rd=true;break;}if(S.auction[i].bid==='X'){db=true;break;}if(S.auction[i].bid!=='Pass')break;}S.contract={level:lv,suit:su,doubled:db,redoubled:rd,declarer:dec};const di=SE.indexOf(dec);S.dummy=SE[(di+2)%4];S.trickLead=SE[(di+1)%4];S.turnSeat=S.trickLead;S.phase='playing';S.currentTrick=[];rA();bS();}
+function pC(seat,card){const h=S.hands[seat],idx=h.findIndex(c=>c.suit===card.suit&&c.rank===card.rank);if(idx===-1)return;h.splice(idx,1);S.currentTrick.push({seat,card});if(S.currentTrick.length===4){const w=tW(S.currentTrick,S.contract.suit),ws=(SE.indexOf(w)%2===0)?'NS':'EW';S.trickWins[ws]++;rA();bS();setTimeout(()=>{S.currentTrick=[];S.trickLead=w;S.turnSeat=w;if(S.trickWins.NS+S.trickWins.EW===7)eP();else{rA();bS();}},1200);return;}S.turnSeat=SE[(SE.indexOf(seat)+1)%4];rA();bS();}
+function tW(tr,ts){const ls=tr[0].card.suit;let best=tr[0];for(let i=1;i<tr.length;i++){const c=tr[i];if(ts!=='NT'){if(c.card.suit===ts&&best.card.suit!==ts)best=c;else if(c.card.suit===ts&&best.card.suit===ts&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank))best=c;else if(c.card.suit===ls&&best.card.suit===ls&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank))best=c;}else{if(c.card.suit===ls&&best.card.suit===ls&&RANKS.indexOf(c.card.rank)>RANKS.indexOf(best.card.rank))best=c;}}return best.seat;}
+function eP(){S.phase='scoring';const c=S.contract,ds=(SE.indexOf(c.declarer)%2===0)?'NS':'EW',dt=S.trickWins[ds],nd=TN[c.level],made=dt-nd,score=cSc(c,made);rB(score,c,dt);rA();bS();sS(fC(c),'庄家: '+SN[c.declarer]+' | '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' | '+dt+'/7墩',score);}
+function cSc(c,made){const{level:l,suit:s,doubled:d,redoubled:r}=c;if(made>=0){let tp=s==='NT'?30+(l-1)*20:l*20;let m=1;if(d)m=2;if(r)m=4;tp*=m;let b=50;if(tp>=50)b=250;if(l===4)b=750;let e=0;if(d)e+=100;if(r)e+=200;let o=0;if(made>0){if(!d&&!r)o=made*20;else if(d)o=made*100;else o=made*200;}return tp+b+e+o;}const dn=-made;if(!d&&!r)return-(dn*50);if(d){let p=0;if(dn>=1)p+=100;if(dn>=2)p+=200;if(dn>=3)p+=200;for(let i=4;i<=dn;i++)p+=300;return-p;}let p=0;if(dn>=1)p+=200;if(dn>=2)p+=400;if(dn>=3)p+=400;for(let i=4;i<=dn;i++)p+=600;return-p;}
+function rB(sc,ct,dt){S.history.push({boardNum:S.boardNum,hands:S.allHands,auction:[...S.auction],contract:ct?{...ct}:null,declarerTricks:dt||0,score:sc,players:JSON.parse(JSON.stringify(S.players)),timestamp:new Date().toLocaleString('zh-CN')});localStorage.setItem('minibridge-history',JSON.stringify(S.history));}
+function rA(){rT();rMH();rTr();rAu();rCl();uBB();uTB();}
+window.manualStart=function(){if(isHost&&S.phase==='waiting'){for(let s of SE)if(!S.players[s])S.players[s]={peerId:'bot-'+s,name:'机器人'+SN[s]};sNB();}};
+function uTB(){const b=document.getElementById('ib'),sb=document.getElementById('sbtn'),pc=Object.keys(peers).length-1,sc2=SE.filter(s=>S.players[s]).length;if(S.phase==='waiting')b.textContent=(pc>0?'已连接'+pc+'人':'等待玩家...')+' · '+sc2+'/4就座'+(mySeat?' · '+SN[mySeat]:'')+(isHost?' · 房主':'');else if(S.phase==='bidding')b.textContent='第'+S.boardNum+'局 · 叫牌 · '+SN[S.turnSeat];else if(S.phase==='playing')b.textContent='第'+S.boardNum+'局 · '+fC(S.contract)+' · '+SN[S.turnSeat];else b.textContent='第'+S.boardNum+'局 · 结束';if(sb)sb.style.display=(S.phase==='waiting'&&isHost&&sc2>=2)?'inline-block':'none';}
+function rT(){for(let s of SE){const el=document.getElementById('c'+s);if(!el)continue;el.innerHTML='';if(mySeat&&s===mySeat)continue;const hand=S.hands[s]||[],canSee=(!mySeat)||(S.phase==='playing'&&s===S.dummy)||(S.phase==='scoring');const isDT=mySeat&&S.dummy===s&&S.contract&&S.contract.declarer===mySeat&&S.turnSeat===s&&S.phase==='playing';for(let card of hand){const d=document.createElement('div');if(canSee){d.className='mc f '+sc(card.suit);d.innerHTML='<span>'+SY[card.suit]+'</span><span>'+card.rank+'</span>';if(isDT&&iLP(s,card)){d.classList.add('playable');d.onclick=((st,cd)=>()=>{if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});})(s,card);}}else d.className='mc b';el.appendChild(d);}const lbl=document.getElementById('l'+s),p=S.players[s];lbl.textContent=p?SN[s]+' '+p.name:SN[s]+' (空位)';lbl.classList.toggle('on',S.turnSeat===s);const tk=document.getElementById('t'+s);tk.textContent=(S.phase==='playing'||S.phase==='scoring')?S.trickWins[(SE.indexOf(s)%2===0)?'NS':'EW']+'墩':'';}if(mySeat){const lbl=document.getElementById('l'+mySeat),p=S.players[mySeat];if(lbl){lbl.textContent=p?SN[mySeat]+' '+p.name:SN[mySeat];lbl.classList.toggle('on',S.turnSeat===mySeat);}const tk=document.getElementById('t'+mySeat);if(tk)tk.textContent=(S.phase==='playing'||S.phase==='scoring')?S.trickWins[(SE.indexOf(mySeat)%2===0)?'NS':'EW']+'墩':'';}}
+function rMH(){const el=document.getElementById('mh');el.innerHTML='';if(!mySeat)return;const hand=S.hands[mySeat]||[],imt=S.turnSeat===mySeat&&S.phase==='playing';for(let card of hand){const d=document.createElement('div');d.className='myc '+sc(card.suit);d.innerHTML='<span class="st">'+SY[card.suit]+'</span><span>'+card.rank+'</span>';if(imt&&iLP(mySeat,card)){d.classList.add('playable');d.onclick=((st,cd)=>()=>{if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});})(mySeat,card);}el.appendChild(d);}}
+function iLP(seat,card){if(S.currentTrick.length===0)return true;const ls=S.currentTrick[0].card.suit;return card.suit===ls||!S.hands[seat].some(c=>c.suit===ls);}
+function rTr(){const z=document.getElementById('tz');z.innerHTML='';const pm={N:'n',E:'e',S:'s',W:'w'};for(let p of S.currentTrick){const d=document.createElement('div');d.className='tc '+pm[p.seat]+' '+sc(p.card.suit);d.innerHTML='<span style="font-size:1.15em">'+SY[p.card.suit]+'</span><span>'+p.card.rank+'</span>';z.appendChild(d);}}
+function rAu(){const el=document.getElementById('auc');if(S.auction.length===0&&S.phase!=='bidding'){el.style.display='none';return;}if(S.phase!=='bidding'&&S.phase!=='playing'){el.style.display='none';return;}el.style.display='block';let h='<table><tr>';for(let i=0;i<4;i++)h+='<th>'+SN[SE[(S.dealer+i)%4]]+'</th>';h+='</tr><tr>';for(let i=0;i<S.auction.length;i++){h+='<td>'+fB(S.auction[i].bid)+'</td>';if((i+1)%4===0)h+='</tr><tr>';}h+='</tr></table>';el.innerHTML=h;}
+function fB(b){if(b==='Pass')return'<span style="color:#777">P</span>';if(b==='X')return'<span style="color:#e74c3c">X</span>';if(b==='XX')return'<span style="color:#5dade2">XX</span>';const s=b.slice(1);return s==='NT'?b[0]+'NT':b[0]+'<span style="color:'+scd(s)+'">'+SY[s]+'</span>';}
+function rCl(){document.getElementById('cl').textContent=(S.contract&&S.phase==='playing')?fC(S.contract):'';}
+function fC(c){if(!c)return'';let s=c.level+(c.suit==='NT'?'NT':SY[c.suit]);if(c.redoubled)s+='XX';else if(c.doubled)s+='X';return s+' '+SN[c.declarer];}
+function uBB(){const box=document.getElementById('bidbox');if(S.phase!=='bidding'||S.turnSeat!==mySeat){box.style.display='none';return;}box.style.display='block';document.querySelectorAll('.bb[data-bid]').forEach(b=>{b.disabled=!iV(mySeat,b.dataset.bid);});document.getElementById('db').disabled=!iV(mySeat,'X');document.getElementById('rb').disabled=!iV(mySeat,'XX');}
+function bBG(){const g=document.getElementById('bidgrid');g.innerHTML='';for(let l of LV)for(let s of BS){const bid=l+s,btn=document.createElement('button');btn.className='bb';btn.dataset.bid=bid;btn.innerHTML=s==='NT'?l+'NT':l+SY[s];btn.onclick=()=>makeBid(bid);g.appendChild(btn);}}
+window.makeBid=function(bid){if(!mySeat||S.turnSeat!==mySeat||!iV(mySeat,bid))return;if(isHost)pB(mySeat,bid);else ms({type:'bid',seat:mySeat,bid});};
+function sS(t,d,sc2){document.getElementById('st').textContent=t;document.getElementById('sd').textContent=d;const v=document.getElementById('sv');v.textContent=sc2===0?'—':(sc2>0?'+'+sc2:''+sc2);v.style.color=sc2>=0?'#2ecc71':'#e74c3c';document.getElementById('spop').classList.add('show');}
+window.closeScore=function(){document.getElementById('spop').classList.remove('show');if(isHost)sNB();else ms({type:'request_deal'});};
+window.toggleHistory=function(){const p=document.getElementById('hp');p.classList.toggle('show');if(p.classList.contains('show'))rH();};
+function rH(){const l=document.getElementById('hl');if(!S.history.length){l.innerHTML='<div style="color:var(--text2)">暂无</div>';return;}let h='';for(let i=S.history.length-1;i>=0;i--){const r=S.history[i],cs=r.contract?fC(r.contract):'全Pass',ss=r.score>0?'+'+r.score:''+r.score;let rs='';if(r.contract){const m=r.declarerTricks-TN[r.contract.level];rs=m>=0?(m===0?'完成':'超'+m+'墩'):'宕'+(-m);}else rs='流局';let hs='';if(r.hands)for(let s of SE){const n=r.players[s]?r.players[s].name:SN[s];hs+=SN[s]+'('+n+'): '+r.hands[s].map(c=>SY[c.suit]+c.rank).join(' ')+'<br>';}let as='';if(r.auction&&r.auction.length)as=r.auction.map(a=>{if(a.bid==='Pass')return'P';if(a.bid==='X'||a.bid==='XX')return a.bid;const su=a.bid.slice(1);return a.bid[0]+(su==='NT'?'NT':SY[su]);}).join('-');h+='<div class="hi"><div><span class="bn">第'+r.boardNum+'局</span> · '+r.timestamp+'</div><div class="ct">'+cs+' · '+rs+'</div><div class="res">得分: <span style="color:'+(r.score>=0?'#2ecc71':'#e74c3c')+'">'+ss+'</span></div>'+(as?'<div class="dt">叫牌: '+as+'</div>':'')+'<div class="dt">'+hs+'</div></div>';}l.innerHTML=h;}
 </script>
 </body>
 </html>
