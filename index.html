@@ -419,7 +419,7 @@ body {
 <!-- ═══ LOBBY ═══ -->
 <div id="lobby">
   <h1>♠ 小小桥牌 ♣</h1>
-  <div class="subtitle">28张牌 · P2P 在线对战</div>
+
   <div class="form-group">
     <label>你的昵称</label>
     <input type="text" id="nickname" placeholder="输入昵称" maxlength="12">
@@ -1092,7 +1092,8 @@ function renderHands() {
 
     const canSee = (s === mySeat) ||
                    (state.phase === 'playing' && s === state.dummy) ||
-                   (state.phase === 'scoring');
+                   (state.phase === 'scoring') ||
+                   (!mySeat);
 
     const isMyTurn = state.turnSeat === s && state.phase === 'playing';
     const canIPlay = (s === mySeat) ||
