@@ -4,11 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>小小桥牌</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap');
-:root{
-  --bg:#0c1117;--bg2:#161d27;--bg3:#1e2836;
-  --felt:#1a6b3c;--felt2:#28884e;
+e;
   --gold:#c9a84c;--text:#ddd8ce;--text2:#9a978f;
   --accent:#e2c44d;--red:#c0392b;--card:#fffef8;
   --card-sh:rgba(0,0,0,.35);
@@ -27,80 +23,113 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 #lobby button{margin-top:12px;padding:12px 0;background:var(--felt);color:#fff;border:none;border-radius:8px;font-size:1em;cursor:pointer;width:256px;font-weight:600;transition:background .2s}
 #lobby button:hover{background:var(--felt2)}
 
-/* GAME SHELL */
-#game{display:none;width:100vw;height:100dvh;flex-direction:column}
-.topbar{display:flex;align-items:center;padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--bg3);z-index:10;flex-shrink:0;gap:6px}
-.topbar .info{color:var(--accent);font-size:.76em;font-weight:600;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tbtn{padding:4px 10px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.72em;white-space:nowrap;flex-shrink:0}
+/* ── GAME SHELL: full-screen absolute layout ── */
+#game{display:none;width:100vw;height:100dvh;position:relative;background:var(--bg)}
+
+/* ── 3x3 grid: top / middle-row / bottom  ── */
+#board{
+  position:absolute;inset:0;
+  display:grid;
+  grid-template-rows:1fr 1.4fr 1fr;
+  grid-template-columns:1fr 2fr 1fr;
+  grid-template-areas:
+    ". top    ."
+    "left center right"
+    ". bottom .";
+}
+.pz{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;overflow:visible}
+.pz.top   {grid-area:top}
+.pz.bottom{grid-area:bottom;justify-content:flex-end;padding-bottom:98px}
+.pz.left  {grid-area:left}
+.pz.right {grid-area:right}
+
+/* player label */
+.plbl{padding:3px 10px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.72em;font-weight:700;color:var(--gold);white-space:nowrap}
+.plbl.on{outline:2px solid var(--accent);color:var(--accent)}
+.plbl.dummy-badge{color:#7ee8a2}
+.ptk{font-size:.6em;color:var(--text2)}
+
+/* card containers */
+.cds{display:flex;flex-wrap:nowrap;overflow:visible}
+.pz.top    .cds,.pz.bottom .cds{flex-direction:row;gap:1px;align-items:flex-end}
+.pz.left   .cds,.pz.right  .cds{flex-direction:column;gap:0;align-items:center}
+
+/* Mini cards */
+.mc{background:var(--card);border-radius:4px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1;flex-shrink:0;box-shadow:1px 2px 4px var(--card-sh)}
+.mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
+.mc.b::after{content:'';display:block;width:60%;height:70%;border:1px solid rgba(255,255,255,.15);border-radius:2px}
+.mc.playable{border:2px solid var(--accent);cursor:pointer}
+/* horizontal zones */
+.pz.top .mc,.pz.bottom .mc{width:34px;height:50px;font-size:.58em}
+/* vertical zones — wide flat chips */
+.pz.left .mc,.pz.right .mc{width:54px;height:22px;flex-direction:row;gap:3px;font-size:.52em;margin:-3px 0}
+.pz.left .mc.b::after,.pz.right .mc.b::after{width:70%;height:55%}
+
+/* CENTER (felt) */
+.table-center{
+  grid-area:center;position:relative;
+  background:radial-gradient(ellipse at 50% 48%,#28884e 0%,var(--felt) 55%,#134a2a 100%);
+  border-radius:10px;margin:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.tz{width:180px;height:160px;position:relative;flex-shrink:0}
+.tc{position:absolute;width:52px;height:76px;background:var(--card);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.78em;font-weight:700;line-height:1.1;box-shadow:2px 4px 10px var(--card-sh)}
+.tc.pos-top   {top:0;   left:50%;transform:translateX(-50%)}
+.tc.pos-bottom{bottom:0;left:50%;transform:translateX(-50%)}
+.tc.pos-left  {top:50%; left:0; transform:translateY(-50%)}
+.tc.pos-right {top:50%; right:0;transform:translateY(-50%)}
+.cl{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:var(--gold);font-size:.82em;font-weight:700;background:rgba(0,0,0,.5);padding:2px 12px;border-radius:10px;pointer-events:none;white-space:nowrap}
+
+/* ── AUCTION: always-visible right panel + center overlay during bidding ── */
+#auc-panel{
+  position:absolute;top:8px;right:8px;
+  background:rgba(15,18,26,.92);border:1px solid #2a3040;border-radius:8px;
+  padding:6px 10px;min-width:155px;font-size:.68em;z-index:10;
+}
+#auc-panel.hidden{display:none}
+#auc-panel table,#auc-overlay table{border-collapse:collapse;width:100%}
+#auc-panel th,#auc-overlay th{color:var(--gold);padding:2px 6px;border-bottom:1px solid #2a3040;font-weight:700;text-align:center}
+#auc-panel td,#auc-overlay td{padding:2px 6px;text-align:center}
+
+#auc-overlay{
+  display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(15,18,26,.95);border:1px solid #2a3040;border-radius:10px;
+  padding:10px 14px;z-index:25;min-width:220px;font-size:.8em;
+}
+#auc-overlay.show{display:block}
+
+/* ── STATUS badge top-left ── */
+#status-badge{
+  position:absolute;top:8px;left:8px;z-index:10;
+  background:rgba(0,0,0,.7);border-radius:6px;padding:5px 10px;
+  font-size:.7em;color:var(--text2);line-height:1.7;
+}
+.tbtn{padding:4px 9px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.7em}
 .tbtn:hover{background:#2a3548}
 .tbtn.go{background:var(--felt);color:#fff;border-color:var(--felt)}
 
-/* TABLE */
-.mid{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-.table{
-  width:min(500px,90vw);aspect-ratio:1;position:relative;
-  background:radial-gradient(ellipse at 50% 45%,#28884e,var(--felt) 60%,#134a2a 100%);
-  border-radius:18px;border:4px solid #3a2f20;
-  box-shadow:0 4px 40px rgba(0,0,0,.5),inset 0 0 30px rgba(0,0,0,.15);
-  display:grid;
-  grid-template-areas:". top ." "left center right" ". bottom .";
-  grid-template-columns:minmax(50px,1.1fr) 2fr minmax(50px,1.1fr);
-  grid-template-rows:minmax(46px,1fr) 2fr minmax(46px,1fr)
+/* ── MY HAND fixed bottom overlay ── */
+#myhand-bar{
+  position:absolute;bottom:0;left:0;right:0;
+  display:flex;align-items:flex-end;justify-content:center;
+  gap:0;padding:6px 10px 10px;
+  background:linear-gradient(transparent,rgba(0,0,0,.88) 28%);
+  min-height:100px;overflow-x:auto;z-index:5;
 }
-.pz{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;overflow:visible;min-width:0}
-.pz.top{grid-area:top}.pz.bottom{grid-area:bottom}
-.pz.left{grid-area:left}.pz.right{grid-area:right}
-.pz .lbl{font-size:.68em;padding:2px 8px;border-radius:4px;background:rgba(0,0,0,.45);white-space:nowrap;color:var(--gold);font-weight:700;transition:box-shadow .2s,background .2s}
-.pz .lbl.on{box-shadow:0 0 10px var(--accent);background:rgba(0,0,0,.6);color:var(--accent)}
-.pz .lbl.dummy-badge{color:#7ee8a2}
-.pz .tk{font-size:.58em;color:var(--text2);font-weight:600}
-.pz .cds{display:flex;gap:1px;justify-content:center;flex-wrap:nowrap;overflow:visible}
-.pz.left .cds,.pz.right .cds{flex-direction:column;gap:0}
-
-/* Mini cards (other players) */
-.mc{width:28px;height:40px;border-radius:3px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-size:.55em;font-weight:700;line-height:1;flex-shrink:0;box-shadow:0 1px 2px var(--card-sh)}
-.mc.f{background:var(--card)}.mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)}
-.mc.b::after{content:'';display:block;width:13px;height:20px;border:1px solid rgba(255,255,255,.13);border-radius:2px}
-.mc.playable{border:2px solid var(--accent);cursor:pointer}
-.pz.left .mc,.pz.right .mc{width:38px;height:20px;flex-direction:row;gap:2px;font-size:.48em;margin:-4px 0}
-.pz.left .mc.b::after,.pz.right .mc.b::after{width:18px;height:9px}
-
-/* Trick center */
-.table-center{grid-area:center;position:relative;display:flex;align-items:center;justify-content:center}
-.tz{width:160px;height:140px;position:relative}
-.tc{position:absolute;width:46px;height:66px;background:var(--card);border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.72em;font-weight:700;box-shadow:2px 3px 8px var(--card-sh);line-height:1.1}
-/* trick card positions are relative to my seat — see JS */
-.tc.pos-top{top:0;left:50%;transform:translateX(-50%)}
-.tc.pos-bottom{bottom:0;left:50%;transform:translateX(-50%)}
-.tc.pos-left{top:50%;left:0;transform:translateY(-50%)}
-.tc.pos-right{top:50%;right:0;transform:translateY(-50%)}
-
-.cl{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);color:var(--gold);font-size:.85em;font-weight:700;pointer-events:none;white-space:nowrap;background:rgba(0,0,0,.4);padding:2px 10px;border-radius:10px}
-
-/* Auction display — center during bidding, corner during play */
-#auc{display:none;position:absolute;background:rgba(10,16,24,.9);border:1px solid #2a3548;border-radius:8px;padding:6px 10px;z-index:5;backdrop-filter:blur(3px)}
-#auc.bid-phase{top:50%;left:50%;transform:translate(-50%,-50%);min-width:190px;max-height:230px;overflow-y:auto}
-#auc.play-phase{top:6px;right:6px;font-size:.63em;min-width:140px;max-height:160px;overflow-y:auto}
-#auc table{border-collapse:collapse;width:100%}
-#auc th{color:var(--gold);padding:2px 5px;border-bottom:1px solid #2a3548;font-weight:700}
-#auc td{padding:2px 5px;text-align:center;font-size:.95em}
-
-/* My hand */
-.btm{display:flex;align-items:flex-end;justify-content:center;gap:0;padding:6px 8px 10px;background:var(--bg2);border-top:1px solid var(--bg3);flex-shrink:0;min-height:92px;overflow-x:auto}
-.suit-grp{display:flex;gap:2px;margin:0 3px}
-.myc{width:52px;height:76px;background:var(--card);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.82em;font-weight:700;line-height:1.15;box-shadow:0 2px 8px var(--card-sh);cursor:default;transition:transform .12s,box-shadow .12s;user-select:none;flex-shrink:0}
+.suit-grp{display:flex;gap:2px;margin:0 4px}
+.myc{width:58px;height:84px;background:var(--card);border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.88em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .12s,box-shadow .12s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:2px solid var(--accent)}
-.myc.playable:hover{transform:translateY(-10px);box-shadow:0 8px 20px rgba(0,0,0,.5)}
-.myc .sym{font-size:1.1em}.myc .rk{font-size:1.1em;font-weight:800}
-.ss{color:#222}.sh{color:var(--red)}.sd{color:#c0392b}.sc{color:#1a7a42}
+.myc.playable:hover{transform:translateY(-12px);box-shadow:0 10px 24px rgba(0,0,0,.6)}
+.myc .sym{font-size:1.05em}.myc .rk{font-size:1.15em;font-weight:800}
+.ss{color:#111}.sh{color:var(--red)}.sd{color:#d05000}.sc{color:#1a7a42}
 
-/* Bid box */
-#bidbox{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--bg3);border-radius:12px;padding:10px;z-index:20;width:min(330px,92vw);box-shadow:0 4px 24px rgba(0,0,0,.5)}
-#bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:7px}
-.bb{padding:7px 2px;border:none;border-radius:5px;background:var(--bg3);color:var(--text);font-size:.76em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
-.bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.22;cursor:not-allowed}
+/* ── BID BOX right-side panel ── */
+#bidbox{display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(15,18,26,.96);border:1px solid #333;border-radius:12px;padding:10px;z-index:30;width:200px;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+#bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
+.bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
+.bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
 .bb.pass{background:#3d4a5c;color:#aaa}.bb.dbl{background:#8e3b3b;color:#fff}.bb.rdbl{background:#2b5ea0;color:#fff}
-#bact{display:flex;gap:6px;justify-content:center}
+#bact{display:flex;gap:5px;justify-content:center}
 
 /* Score popup */
 #spop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
@@ -119,7 +148,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .hi{background:var(--bg2);border-radius:7px;padding:10px;margin-bottom:8px;font-size:.78em}
 .hi .bn{color:var(--gold);font-weight:700}.hi .ct{color:var(--accent)}.hi .dt{margin-top:3px;color:var(--text2);font-size:.88em;line-height:1.5}
 
-/* Seat picker overlay */
+/* Seat picker */
 #seat-pick{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;align-items:center;justify-content:center}
 #seat-pick.show{display:flex}
 #seat-pick .bx{background:var(--bg2);border:2px solid var(--bg3);border-radius:14px;padding:20px 26px;text-align:center;width:min(320px,90vw)}
@@ -130,13 +159,12 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .sbtn:disabled{opacity:.3;cursor:not-allowed}
 .sbtn-cancel{padding:8px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:.85em}
 
-@media(max-width:480px){
-  .table{width:96vw}
-  .myc{width:44px;height:66px;font-size:.72em}
-  .mc{width:22px;height:32px;font-size:.46em}
-  .pz.left .mc,.pz.right .mc{width:30px;height:16px;font-size:.4em;margin:-4px 0}
-  .tc{width:38px;height:54px;font-size:.62em}
-  .bb{font-size:.68em;padding:6px 1px}
+@media(max-width:600px){
+  .pz.top .mc,.pz.bottom .mc{width:26px;height:40px;font-size:.48em}
+  .pz.left .mc,.pz.right .mc{width:44px;height:18px;font-size:.44em}
+  .myc{width:46px;height:68px;font-size:.76em}
+  .tc{width:42px;height:62px;font-size:.66em}
+  #bidbox{width:180px}.bb{font-size:.66em;padding:6px 1px}
 }
 </style>
 </head>
@@ -153,24 +181,22 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 
 <!-- GAME -->
 <div id="game">
-  <div class="topbar">
+  <div id="board">
+    <div class="pz top"   id="pz-top">  <div class="plbl" id="lbl-top">—</div><div class="cds" id="cds-top"></div><div class="ptk" id="tk-top"></div></div>
+    <div class="pz left"  id="pz-left"> <div class="plbl" id="lbl-left">—</div><div class="cds" id="cds-left"></div><div class="ptk" id="tk-left"></div></div>
+    <div class="table-center"><div class="tz" id="tz"></div><div class="cl" id="cl"></div></div>
+    <div class="pz right" id="pz-right"><div class="plbl" id="lbl-right">—</div><div class="cds" id="cds-right"></div><div class="ptk" id="tk-right"></div></div>
+    <div class="pz bottom" id="pz-bottom"><div class="plbl" id="lbl-bottom">—</div><div class="cds" id="cds-bottom"></div><div class="ptk" id="tk-bottom"></div></div>
+  </div>
+  <div id="status-badge">
+    <span id="ib">连接中...</span><br>
     <button class="tbtn go" id="sbtn" style="display:none" onclick="manualStart()">开始发牌</button>
-    <span class="info" id="ib">连接中...</span>
     <button class="tbtn" onclick="showSeatPick()">换座位</button>
-    <button class="tbtn" onclick="toggleHistory()">📋</button>
+    <button class="tbtn" onclick="toggleHistory()">📋历史</button>
   </div>
-  <div class="mid">
-    <div class="table" id="table">
-      <!-- positions: top/bottom/left/right — remapped by JS based on mySeat -->
-      <div class="pz top"   id="pz-top">  <div class="lbl" id="lbl-top">—</div><div class="cds" id="cds-top"></div><div class="tk" id="tk-top"></div></div>
-      <div class="pz left"  id="pz-left"> <div class="lbl" id="lbl-left">—</div><div class="cds" id="cds-left"></div><div class="tk" id="tk-left"></div></div>
-      <div class="table-center"><div class="tz" id="tz"></div><div class="cl" id="cl"></div></div>
-      <div class="pz right" id="pz-right"><div class="lbl" id="lbl-right">—</div><div class="cds" id="cds-right"></div><div class="tk" id="tk-right"></div></div>
-      <div class="pz bottom" id="pz-bottom"><div class="lbl" id="lbl-bottom">—</div><div class="cds" id="cds-bottom"></div><div class="tk" id="tk-bottom"></div></div>
-    </div>
-    <div id="auc"></div>
-  </div>
-  <div class="btm" id="mh"></div>
+  <div id="auc-panel" class="hidden"></div>
+  <div id="auc-overlay"></div>
+  <div id="myhand-bar"></div>
   <div id="bidbox">
     <div id="bidgrid"></div>
     <div id="bact">
@@ -256,8 +282,9 @@ window.joinGame=function(){
   if(!rid){alert('请输入房间号');return;}
 
   // Restore session if same room
+  let savedOrigId=null;
   const saved=sessionStorage.getItem('mb-session');
-  if(saved){try{const o=JSON.parse(saved);if(o.rid===rid){myId=o.myId;mySeat=o.mySeat;myName=o.myName;}}catch(e){}}
+  if(saved){try{const o=JSON.parse(saved);if(o.rid===rid){savedOrigId=o.myId;myId=o.myId;mySeat=o.mySeat;myName=o.myName;}}catch(e){}}
 
   document.getElementById('lobby').style.display='none';
   document.getElementById('game').style.display='flex';
@@ -283,10 +310,15 @@ window.joinGame=function(){
       mq.subscribe(rt,e=>{
         if(e){log('订阅失败');return;}
         log('已加入房间 '+rid);
-        if(mySeat)S.players[mySeat]={peerId:myId,name:myName};
         peers[myId]={seat:mySeat,name:myName};
         eH();
-        ms({type:'hello',seat:mySeat,name:myName});
+        if(mySeat&&savedOrigId&&savedOrigId!==myId){
+          // Reconnect: claim old seat by original peerId
+          ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:savedOrigId});
+        } else {
+          if(mySeat)S.players[mySeat]={peerId:myId,name:myName};
+          ms({type:'hello',seat:mySeat,name:myName});
+        }
         rA();bBG();
       });
     });
@@ -315,10 +347,25 @@ function onM(_,p){
 
   if(d.type==='hello'){
     peers[d._from]={seat:d.seat,name:d.name};
+    // Only claim a seat via hello if it's empty — reconnect must use take_seat/reconnect_claim
     if(d.seat&&!S.players[d.seat])S.players[d.seat]={peerId:d._from,name:d.name};
     eH();
     if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),400);
     cR();rA();
+  }
+  else if(d.type==='reconnect_claim'){
+    // Player reconnecting to reclaim their seat by original peerId
+    if(isHost){
+      const prev=SE.find(s=>S.players[s]&&S.players[s].peerId===d.origId);
+      if(prev){
+        S.players[prev]={peerId:d._from,name:d.name};
+        peers[d._from]={seat:prev,name:d.name};
+        bS();
+      } else if(d.seat&&!S.players[d.seat]){
+        S.players[d.seat]={peerId:d._from,name:d.name};
+        bS();
+      }
+    }
   }
   else if(d.type==='full_state'){
     if(d._from===hostId&&!isHost){
@@ -598,7 +645,7 @@ function rTable(){
     let lblTxt=SN[seat]+(p?' '+p.name:' (空位)');
     if(isDummy&&S.dummyRevealed)lblTxt+=' [明手]';
     lblEl.textContent=lblTxt;
-    lblEl.className='lbl'+(S.turnSeat===seat?' on':'')+(isDummy&&S.dummyRevealed?' dummy-badge':'');
+    lblEl.className='plbl'+(S.turnSeat===seat?' on':'')+(isDummy&&S.dummyRevealed?' dummy-badge':'');
 
     // Tricks
     tkEl.textContent=(S.phase==='playing'||S.phase==='scoring')?S.trickWins[(SE.indexOf(seat)%2===0)?'NS':'EW']+'墩':'';
@@ -662,7 +709,7 @@ function rTable(){
 }
 
 function rMH(){
-  const el=document.getElementById('mh');
+  const el=document.getElementById('myhand-bar');
   el.innerHTML='';
   if(!mySeat)return;
 
@@ -721,13 +768,14 @@ function rTr(){
 }
 
 function rAu(){
-  const el=document.getElementById('auc');
-  if(S.auction.length===0&&S.phase!=='bidding'){el.style.display='none';return;}
-  if(S.phase!=='bidding'&&S.phase!=='playing'){el.style.display='none';return;}
-  el.style.display='block';
-  el.className=S.phase==='bidding'?'bid-phase':'play-phase';
+  const panel=document.getElementById('auc-panel');
+  const overlay=document.getElementById('auc-overlay');
+  const isBidding=S.phase==='bidding';
+  const isPlaying=S.phase==='playing';
+  if(S.auction.length===0&&!isBidding){panel.classList.add('hidden');overlay.classList.remove('show');return;}
+  if(!isBidding&&!isPlaying){panel.classList.add('hidden');overlay.classList.remove('show');return;}
 
-  // Column headers follow dealer order
+  // Build auction table HTML
   let h='<table><tr>';
   for(let i=0;i<4;i++)h+='<th>'+SN[SE[(S.dealer+i)%4]]+'</th>';
   h+='</tr><tr>';
@@ -736,7 +784,18 @@ function rAu(){
     if((i+1)%4===0)h+='</tr><tr>';
   }
   h+='</tr></table>';
-  el.innerHTML=h;
+
+  if(isBidding){
+    // Show large centered overlay, hide right panel
+    overlay.innerHTML=h;
+    overlay.classList.add('show');
+    panel.classList.add('hidden');
+  } else {
+    // Playing: show right panel, hide overlay
+    panel.innerHTML=h;
+    panel.classList.remove('hidden');
+    overlay.classList.remove('show');
+  }
 }
 
 function fB(b){
