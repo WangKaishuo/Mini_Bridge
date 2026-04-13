@@ -30,22 +30,18 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 /* ── GAME SHELL: full-screen absolute layout ── */
 #game{display:none;width:100vw;height:100dvh;position:relative;background:var(--bg)}
 
-/* ── 3x3 grid: top / middle-row / bottom  ── */
+
+/* ── Full-screen felt: #board IS the table ── */
 #board{
   position:absolute;inset:0;
-  display:grid;
-  grid-template-rows:1fr 1.4fr 1fr;
-  grid-template-columns:1fr 2fr 1fr;
-  grid-template-areas:
-    ". top    ."
-    "left center right"
-    ". bottom .";
+  background:radial-gradient(ellipse at 50% 48%,#28884e 0%,var(--felt) 58%,#134a2a 100%);
 }
-.pz{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;overflow:visible}
-.pz.top   {grid-area:top}
-.pz.bottom{grid-area:bottom;justify-content:flex-end;padding-bottom:98px}
-.pz.left  {grid-area:left}
-.pz.right {grid-area:right}
+/* Player zones: absolute on each edge */
+.pz{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;overflow:visible;z-index:2}
+.pz.top   {top:0;left:50%;transform:translateX(-50%);padding-top:8px}
+.pz.bottom{bottom:126px;left:50%;transform:translateX(-50%);flex-direction:column-reverse;padding-bottom:6px}
+.pz.left  {left:0;top:50%;transform:translateY(-50%);padding-left:8px}
+.pz.right {right:0;top:50%;transform:translateY(-50%);padding-right:8px}
 
 /* player label */
 .plbl{padding:3px 10px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.72em;font-weight:700;color:var(--gold);white-space:nowrap}
@@ -53,31 +49,27 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .plbl.dummy-badge{color:#7ee8a2}
 .ptk{font-size:.6em;color:var(--text2)}
 
-/* card containers */
+/* card rows */
 .cds{display:flex;flex-wrap:nowrap;overflow:visible}
-.pz.top    .cds,.pz.bottom .cds{flex-direction:row;gap:1px;align-items:flex-end}
-.pz.left   .cds,.pz.right  .cds{flex-direction:column;gap:0;align-items:center}
+.pz.top .cds,.pz.bottom .cds{flex-direction:row;gap:1px;align-items:flex-end}
+.pz.left .cds,.pz.right .cds{flex-direction:column;gap:0;align-items:center}
 
 /* Mini cards */
 .mc{background:var(--card);border-radius:4px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1;flex-shrink:0;box-shadow:1px 2px 4px var(--card-sh)}
 .mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
 .mc.b::after{content:'';display:block;width:60%;height:70%;border:1px solid rgba(255,255,255,.15);border-radius:2px}
 .mc.playable{border:2px solid var(--accent);cursor:pointer}
-/* horizontal zones */
-.pz.top .mc,.pz.bottom .mc{width:34px;height:50px;font-size:.58em}
-/* vertical zones — wide flat chips */
-.pz.left .mc,.pz.right .mc{width:54px;height:22px;flex-direction:row;gap:3px;font-size:.52em;margin:-3px 0}
+.pz.top .mc,.pz.bottom .mc{width:40px;height:58px;font-size:.65em}
+.pz.left .mc,.pz.right .mc{width:62px;height:26px;flex-direction:row;gap:3px;font-size:.58em;margin:-4px 0}
 .pz.left .mc.b::after,.pz.right .mc.b::after{width:70%;height:55%}
 
-/* CENTER (felt) */
+/* CENTER trick zone — absolutely centered */
 .table-center{
-  grid-area:center;position:relative;
-  background:radial-gradient(ellipse at 50% 48%,#28884e 0%,var(--felt) 55%,#134a2a 100%);
-  border-radius:10px;margin:6px;
-  display:flex;align-items:center;justify-content:center;
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  display:flex;align-items:center;justify-content:center;z-index:2;
 }
 .tz{width:180px;height:160px;position:relative;flex-shrink:0}
-.tc{position:absolute;width:52px;height:76px;background:var(--card);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.78em;font-weight:700;line-height:1.1;box-shadow:2px 4px 10px var(--card-sh)}
+.tc{position:absolute;width:58px;height:84px;background:var(--card);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.88em;font-weight:700;line-height:1.1;box-shadow:2px 4px 10px var(--card-sh)}
 .tc.pos-top   {top:0;   left:50%;transform:translateX(-50%)}
 .tc.pos-bottom{bottom:0;left:50%;transform:translateX(-50%)}
 .tc.pos-left  {top:50%; left:0; transform:translateY(-50%)}
@@ -105,12 +97,27 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 /* ── STATUS badge top-left ── */
 #status-badge{
   position:absolute;top:8px;left:8px;z-index:10;
-  background:rgba(0,0,0,.7);border-radius:6px;padding:5px 10px;
+  background:rgba(0,0,0,.65);border-radius:6px;padding:5px 10px;
   font-size:.7em;color:var(--text2);line-height:1.7;
 }
 .tbtn{padding:4px 9px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.7em}
 .tbtn:hover{background:#2a3548}
 .tbtn.go{background:var(--felt);color:#fff;border-color:var(--felt)}
+
+/* ── Centered seat-prompt when spectating ── */
+#seat-prompt{
+  display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:15;text-align:center;
+  background:rgba(0,0,0,.72);border:1px solid var(--gold);
+  border-radius:14px;padding:22px 36px;
+}
+#seat-prompt.show{display:block}
+#seat-prompt p{color:var(--text2);font-size:.85em;margin-bottom:14px}
+#seat-prompt button{
+  padding:12px 32px;background:var(--gold);color:#111;
+  border:none;border-radius:8px;font-size:1.05em;font-weight:700;cursor:pointer;
+}
+#seat-prompt button:hover{background:var(--accent)}
 
 /* ── MY HAND fixed bottom overlay ── */
 #myhand-bar{
@@ -118,17 +125,17 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   display:flex;align-items:flex-end;justify-content:center;
   gap:0;padding:6px 10px 10px;
   background:linear-gradient(transparent,rgba(0,0,0,.88) 28%);
-  min-height:100px;overflow-x:auto;z-index:5;
+  min-height:118px;overflow-x:auto;z-index:5;
 }
-.suit-grp{display:flex;gap:2px;margin:0 4px}
-.myc{width:58px;height:84px;background:var(--card);border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.88em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .12s,box-shadow .12s;user-select:none;flex-shrink:0}
-.myc.playable{cursor:pointer;border:2px solid var(--accent)}
-.myc.playable:hover{transform:translateY(-12px);box-shadow:0 10px 24px rgba(0,0,0,.6)}
-.myc .sym{font-size:1.05em}.myc .rk{font-size:1.15em;font-weight:800}
+.suit-grp{display:flex;gap:1px;margin:0}
+.myc{width:72px;height:104px;background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
+.myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5)}
+.myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
+.myc .sym{font-size:1.2em}.myc .rk{font-size:1.4em;font-weight:800}
 .ss{color:#111}.sh{color:var(--red)}.sd{color:#d05000}.sc{color:#1a7a42}
 
 /* ── BID BOX right-side panel ── */
-#bidbox{display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(15,18,26,.96);border:1px solid #333;border-radius:12px;padding:10px;z-index:30;width:200px;box-shadow:0 4px 24px rgba(0,0,0,.6)}
+#bidbox{display:none;position:absolute;bottom:122px;left:50%;transform:translateX(-50%);background:rgba(15,18,26,.96);border:1px solid #444;border-radius:12px;padding:10px;z-index:30;width:min(320px,90vw);box-shadow:0 4px 24px rgba(0,0,0,.7)}
 #bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
 .bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
 .bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
@@ -198,6 +205,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
     <button class="tbtn" onclick="showSeatPick()">换座位</button>
     <button class="tbtn" onclick="toggleHistory()">📋历史</button>
   </div>
+  <div id="seat-prompt"><p>你还没有入座</p><button onclick="showSeatPick()">点击入座</button></div>
   <div id="auc-panel" class="hidden"></div>
   <div id="auc-overlay"></div>
   <div id="myhand-bar"></div>
@@ -354,7 +362,7 @@ function onM(_,p){
     // Only claim a seat via hello if it's empty — reconnect must use take_seat/reconnect_claim
     if(d.seat&&!S.players[d.seat])S.players[d.seat]={peerId:d._from,name:d.name};
     eH();
-    if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),400);
+    if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),100);
     cR();rA();
   }
   else if(d.type==='reconnect_claim'){
@@ -383,10 +391,14 @@ function onM(_,p){
   else if(d.type==='play_card'){if(isHost&&S.phase==='playing'&&d.seat===S.turnSeat&&!trickProcessing)pC(d.seat,d.card);}
   else if(d.type==='request_deal'){if(isHost)sNB();}
   else if(d.type==='take_seat'){
-    // Host validates seat requests
-    if(isHost&&d.seat&&!S.players[d.seat]){
-      S.players[d.seat]={peerId:d._from,name:d.name};
-      bS();
+    if(isHost&&d.seat){
+      const occ=S.players[d.seat];
+      // Allow if empty, or if this exact peer already owns it
+      if(!occ||occ.peerId===d._from){
+        S.players[d.seat]={peerId:d._from,name:d.name};
+        bS();
+      }
+      // else reject silently — seat taken by someone else
     }
   }
   else if(d.type==='ping'){
@@ -613,12 +625,15 @@ function rA(){rTable();rMH();rTr();rAu();rCl();uBB();uTB();}
 
 function uTB(){
   const b=document.getElementById('ib'),sb=document.getElementById('sbtn');
+  const sp=document.getElementById('seat-prompt');
   const sc2=SE.filter(s=>S.players[s]).length;
   if(S.phase==='waiting')b.textContent=(Object.keys(peers).length>1?'已连接'+(Object.keys(peers).length-1)+'人 · ':'等待玩家 · ')+sc2+'/4就座'+(mySeat?' · 我:'+SN[mySeat]:'')+(isHost?' · 房主':'');
   else if(S.phase==='bidding')b.textContent='第'+S.boardNum+'局 · 叫牌轮到 '+SN[S.turnSeat]+(mySeat?' · 我:'+SN[mySeat]:'');
   else if(S.phase==='playing')b.textContent='第'+S.boardNum+'局 · '+fC(S.contract)+' · 轮到 '+SN[S.turnSeat];
   else b.textContent='第'+S.boardNum+'局 · 结束';
   if(sb)sb.style.display=(S.phase==='waiting'&&isHost&&sc2>=2)?'inline-block':'none';
+  // Show centered seat prompt only when spectating and game not started
+  if(sp)sp.classList.toggle('show',!mySeat&&S.phase==='waiting');
 }
 
 // Map compass seat to visual position slot
@@ -731,7 +746,7 @@ function rMH(){
   for(const su of suitOrder){
     const cards=bySuit[su];
     if(!cards.length)continue;
-    if(!first){const sep=document.createElement('div');sep.className='suit-grp';sep.style.width='4px';el.appendChild(sep);}
+    
     first=false;
     const grp=document.createElement('div');
     grp.className='suit-grp';
