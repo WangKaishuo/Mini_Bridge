@@ -38,10 +38,10 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 }
 /* Player zones: absolute on each edge */
 .pz{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;overflow:visible;z-index:2}
-.pz.top   {top:0;left:50%;transform:translateX(-50%);padding-top:8px}
-.pz.bottom{bottom:126px;left:50%;transform:translateX(-50%);flex-direction:column-reverse;padding-bottom:6px}
-.pz.left  {left:0;top:50%;transform:translateY(-50%);padding-left:8px}
-.pz.right {right:0;top:50%;transform:translateY(-50%);padding-right:8px}
+.pz.top   {top:8px;left:50%;transform:translateX(-50%)}
+.pz.bottom{bottom:130px;left:50%;transform:translateX(-50%);flex-direction:column-reverse}
+.pz.left  {left:8px;top:50%;transform:translateY(-50%)}
+.pz.right {right:8px;top:50%;transform:translateY(-50%)}
 
 /* player label */
 .plbl{padding:3px 10px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.72em;font-weight:700;color:var(--gold);white-space:nowrap}
@@ -49,19 +49,17 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .plbl.dummy-badge{color:#7ee8a2}
 .ptk{font-size:.6em;color:var(--text2)}
 
-/* card rows */
-.cds{display:flex;flex-wrap:nowrap;overflow:visible}
-.pz.top .cds,.pz.bottom .cds{flex-direction:row;gap:1px;align-items:flex-end}
-.pz.left .cds,.pz.right .cds{flex-direction:column;gap:0;align-items:center}
+/* card rows — ALL zones horizontal */
+.cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:2px}
 
-/* Mini cards */
-.mc{background:var(--card);border-radius:4px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1;flex-shrink:0;box-shadow:1px 2px 4px var(--card-sh)}
+/* All opponent cards same size, horizontal */
+.mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:52px;height:76px;font-size:.82em}
 .mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
-.mc.b::after{content:'';display:block;width:60%;height:70%;border:1px solid rgba(255,255,255,.15);border-radius:2px}
-.mc.playable{border:2px solid var(--accent);cursor:pointer}
-.pz.top .mc,.pz.bottom .mc{width:40px;height:58px;font-size:.65em}
-.pz.left .mc,.pz.right .mc{width:62px;height:26px;flex-direction:row;gap:3px;font-size:.58em;margin:-4px 0}
-.pz.left .mc.b::after,.pz.right .mc.b::after{width:70%;height:55%}
+.mc.b::after{content:'';display:block;width:55%;height:65%;border:1px solid rgba(255,255,255,.15);border-radius:3px}
+.mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5)}
+/* Left/right: rotate the whole hand 90deg so it reads along the edge */
+.pz.left .cds{transform:rotate(90deg);transform-origin:center center}
+.pz.right .cds{transform:rotate(-90deg);transform-origin:center center}
 
 /* CENTER trick zone — absolutely centered */
 .table-center{
@@ -128,7 +126,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   min-height:118px;overflow-x:auto;z-index:5;
 }
 .suit-grp{display:flex;gap:1px;margin:0}
-.myc{width:72px;height:104px;background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
+.myc{width:58px;height:84px;background:var(--card);border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.9em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5)}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
 .myc .sym{font-size:1.2em}.myc .rk{font-size:1.4em;font-weight:800}
@@ -139,8 +137,11 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 #bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
 .bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
 .bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
-.bb.pass{background:#3d4a5c;color:#aaa}.bb.dbl{background:#8e3b3b;color:#fff}.bb.rdbl{background:#2b5ea0;color:#fff}
-#bact{display:flex;gap:5px;justify-content:center}
+.bb.pass{background:#3d4a5c;color:#aaa}.bb.dbl{background:#8e3b3b;color:#fff}.bb.rdbl{background:#2b5ea0;color:#fff}.bb.selected{background:var(--accent)!important;color:#111!important;transform:scale(1.08)}
+#bact{display:flex;gap:5px;justify-content:center;margin-top:2px}
+#confirm-btn{padding:8px 24px;background:var(--gold);color:#111;border:none;border-radius:6px;font-size:.85em;font-weight:800;cursor:pointer;flex:1}
+#confirm-btn:disabled{opacity:.25;cursor:not-allowed}
+#confirm-btn:not(:disabled):hover{background:var(--accent)}
 
 /* Score popup */
 #spop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
@@ -171,8 +172,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .sbtn-cancel{padding:8px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:.85em}
 
 @media(max-width:600px){
-  .pz.top .mc,.pz.bottom .mc{width:26px;height:40px;font-size:.48em}
-  .pz.left .mc,.pz.right .mc{width:44px;height:18px;font-size:.44em}
+  .mc{width:38px;height:56px;font-size:.65em}
   .myc{width:46px;height:68px;font-size:.76em}
   .tc{width:42px;height:62px;font-size:.66em}
   #bidbox{width:180px}.bb{font-size:.66em;padding:6px 1px}
@@ -212,9 +212,10 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div id="bidbox">
     <div id="bidgrid"></div>
     <div id="bact">
-      <button class="bb pass" onclick="makeBid('Pass')">Pass</button>
-      <button class="bb dbl" id="db" onclick="makeBid('X')" disabled>X</button>
-      <button class="bb rdbl" id="rb" onclick="makeBid('XX')" disabled>XX</button>
+      <button class="bb pass" onclick="selectBid('Pass')">Pass</button>
+      <button class="bb dbl" id="db" onclick="selectBid('X')" disabled>X</button>
+      <button class="bb rdbl" id="rb" onclick="selectBid('XX')" disabled>XX</button>
+      <button id="confirm-btn" onclick="confirmBid()" disabled>确认</button>
     </div>
   </div>
   <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
@@ -249,9 +250,12 @@ function layoutFor(me){
   const idx=SE.indexOf(me);
   // bottom = me, top = opposite, left/right = the other two (bridge: LHO left)
   const opp=SE[(idx+2)%4];
-  const lho=SE[(idx+1)%4]; // left-hand opponent → visually RIGHT (they sit to our right in real life but in bridge display convention we put them on the right)
-  const rho=SE[(idx+3)%4];
-  return {bottom:me,top:opp,right:lho,left:rho};
+  const rho=SE[(idx+3)%4]; // RHO: visually on LEFT (e.g. for N: W is RHO... wait)
+  // Standard bridge table: facing partner across, East is to your LEFT, West to your RIGHT
+  // N faces S: left=E, right=W
+  const lho=SE[(idx+1)%4]; // E for N → visually LEFT
+  const rho2=SE[(idx+3)%4]; // W for N → visually RIGHT
+  return {bottom:me,top:opp,left:lho,right:rho2};
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -840,10 +844,17 @@ function uBB(){
   const box=document.getElementById('bidbox');
   if(S.phase!=='bidding'||S.turnSeat!==mySeat){box.style.display='none';return;}
   box.style.display='block';
-  document.querySelectorAll('.bb[data-bid]').forEach(b=>{b.disabled=!iV(mySeat,b.dataset.bid);});
+  selectedBid=null;
+  document.querySelectorAll('.bb[data-bid]').forEach(b=>{
+    b.disabled=!iV(mySeat,b.dataset.bid);
+    b.classList.remove('selected');
+  });
   document.getElementById('db').disabled=!iV(mySeat,'X');
   document.getElementById('rb').disabled=!iV(mySeat,'XX');
+  document.getElementById('confirm-btn').disabled=true;
 }
+
+let selectedBid=null;
 
 function bBG(){
   const g=document.getElementById('bidgrid');
@@ -852,15 +863,33 @@ function bBG(){
     const bid=l+s,btn=document.createElement('button');
     btn.className='bb';btn.dataset.bid=bid;
     btn.innerHTML=s==='NT'?l+'NT':l+SY[s];
-    btn.onclick=()=>makeBid(bid);
+    btn.onclick=()=>selectBid(bid);
     g.appendChild(btn);
   }
 }
 
-window.makeBid=function(bid){
-  if(!mySeat||S.turnSeat!==mySeat||!iV(mySeat,bid))return;
+function selectBid(bid){
+  if(!mySeat||S.turnSeat!==mySeat)return;
+  if(!iV(mySeat,bid))return;
+  selectedBid=bid;
+  // Highlight all bid buttons including Pass/X/XX
+  document.querySelectorAll('.bb').forEach(b=>{
+    const bval=b.dataset.bid||b.textContent.trim();
+    b.classList.toggle('selected',bval===bid);
+  });
+  document.getElementById('confirm-btn').disabled=false;
+}
+
+function confirmBid(bid){
+  bid=bid||selectedBid;
+  if(!bid||!mySeat||S.turnSeat!==mySeat||!iV(mySeat,bid))return;
+  selectedBid=null;
+  document.querySelectorAll('.bb').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('confirm-btn').disabled=true;
   if(isHost)pB(mySeat,bid);else ms({type:'bid',seat:mySeat,bid});
-};
+}
+
+window.makeBid=function(bid){confirmBid(bid);};
 
 // ─── Score popup ──────────────────────────────────────────────────────────────
 function sS(t,det,sc2){
