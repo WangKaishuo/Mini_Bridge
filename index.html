@@ -87,7 +87,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 #auc-panel td,#auc-overlay td{padding:2px 6px;text-align:center}
 
 #auc-overlay{
-  display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  display:none;position:absolute;top:200px;left:50%;transform:translateX(-50%);
   background:rgba(15,18,26,.95);border:1px solid #2a3040;border-radius:10px;
   padding:10px 14px;z-index:25;min-width:220px;font-size:.8em;
 }
@@ -120,14 +120,14 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 
 /* ── MY HAND fixed bottom overlay ── */
 #myhand-bar{
-  position:absolute;bottom:0;left:0;right:0;
-  display:flex;align-items:flex-end;justify-content:center;
-  gap:0;padding:6px 10px 10px;
-  background:linear-gradient(transparent,rgba(0,0,0,.88) 28%);
-  min-height:186px;overflow-x:auto;z-index:5;
+  position:absolute;bottom:10px;left:0;right:0;
+  display:flex;align-items:center;justify-content:center;
+  gap:0;padding:0 10px;
+  background:none;
+  overflow-x:auto;z-index:5;
 }
 .suit-grp{display:flex;gap:1px;margin:0}
-.myc{width:116px;height:168px;background:var(--card);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.8em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
+.myc{width:104px;height:152px;background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.6em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5)}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
 .myc .sym{font-size:1.2em}.myc .rk{font-size:1.4em;font-weight:800}
@@ -364,8 +364,8 @@ function onM(_,p){
 
   if(d.type==='hello'){
     peers[d._from]={seat:d.seat,name:d.name};
-    // Only claim a seat via hello if it's empty — reconnect must use take_seat/reconnect_claim
-    if(d.seat&&!S.players[d.seat])S.players[d.seat]={peerId:d._from,name:d.name};
+    // hello only for initial announce; seat claiming is via take_seat
+    // Don't overwrite any seats here
     eH();
     if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),100);
     cR();rA();
@@ -396,14 +396,23 @@ function onM(_,p){
   else if(d.type==='play_card'){if(isHost&&S.phase==='playing'&&d.seat===S.turnSeat&&!trickProcessing)pC(d.seat,d.card);}
   else if(d.type==='request_deal'){if(isHost)sNB();}
   else if(d.type==='take_seat'){
-    if(isHost&&d.seat){
-      const occ=S.players[d.seat];
-      // Allow if empty, or if this exact peer already owns it
-      if(!occ||occ.peerId===d._from){
+    if(isHost){
+      if(d.seat){
+        const occ=S.players[d.seat];
+        // Reject if seat taken by a DIFFERENT peer
+        if(occ&&occ.peerId!==d._from){bS();return;}
+        // Evict this peer from any OTHER seat first
+        for(const s of SE){
+          if(s!==d.seat&&S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
+        }
         S.players[d.seat]={peerId:d._from,name:d.name};
-        bS();
+      } else {
+        // Vacate: remove this peer from all seats
+        for(const s of SE){
+          if(S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
+        }
       }
-      // else reject silently — seat taken by someone else
+      bS();
     }
   }
   else if(d.type==='ping'){
@@ -581,7 +590,8 @@ window.showSeatPick=function(){
     } else {
       const occ=S.players[s];
       const mine=occ&&occ.peerId===myId;
-      b.textContent=SN[s]+(occ?' ('+occ.name+')':'');
+      b.textContent=SN[s]+(occ?' ('+occ.name+')':'（空）');
+      if(mine)b.style.outline='2px solid var(--accent)';
       if(occ&&!mine)b.disabled=true;
       b.onclick=()=>{takeSeat(s);closeSeatPick();};
     }
@@ -592,28 +602,23 @@ window.showSeatPick=function(){
 window.closeSeatPick=function(){document.getElementById('seat-pick').classList.remove('show');};
 
 function takeSeat(seat){
-  // Vacate old seat
-  if(mySeat&&S.players[mySeat]&&S.players[mySeat].peerId===myId){
-    S.players[mySeat]=null;
-  }
   mySeat=seat;
   // Update session
-  const sv=sessionStorage.getItem('mb-session');
-  if(sv)try{const o=JSON.parse(sv);o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
-
-  if(mySeat){
-    if(isHost){
-      if(!S.players[mySeat])S.players[mySeat]={peerId:myId,name:myName};
-      bS();
-    } else {
-      ms({type:'take_seat',seat:mySeat,name:myName});
-    }
-  } else {
-    // Just spectate — broadcast updated state so others know
-    if(isHost)bS();
-    else ms({type:'hello',seat:null,name:myName});
-  }
+  const sv2=sessionStorage.getItem('mb-session');
+  if(sv2)try{const o=JSON.parse(sv2);o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
   peers[myId]={seat:mySeat,name:myName};
+
+  if(isHost){
+    // Apply directly: evict self from all seats, then take new seat
+    for(const s of SE){if(S.players[s]&&S.players[s].peerId===myId)S.players[s]=null;}
+    if(mySeat){
+      if(!S.players[mySeat])S.players[mySeat]={peerId:myId,name:myName};
+    }
+    bS();
+  } else {
+    // Send to host — host is authoritative
+    ms({type:'take_seat',seat:mySeat,name:myName});
+  }
   rA();
 }
 
@@ -685,7 +690,9 @@ function rTable(){
     // - Everyone sees dummy after dummyRevealed
     // - Scoring phase: everyone sees all
     const amDeclarer=mySeat===S.contract?.declarer;
-    const canSee=(S.phase==='scoring')||
+    const isSpectator=!mySeat;
+    const canSee=isSpectator||
+                 (S.phase==='scoring')||
                  (isDummy&&S.dummyRevealed);
 
     // Can declarer click dummy's cards?
