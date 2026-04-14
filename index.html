@@ -543,6 +543,26 @@ function pB(seat,bid,alertMsg){
   }
   S.turnSeat=SE[(SE.indexOf(seat)+1)%4];
   rA();bS();
+  // Auto-play last trick if all players have exactly 1 card left
+  if(isHost&&S.trickWins.NS+S.trickWins.EW===6&&S.currentTrick.length===0){
+    autoPlayLastTrick();
+  }
+}
+
+function autoPlayLastTrick(){
+  // Each player has exactly 1 card. Play them in order with 700ms delay.
+  let delay=400;
+  let seat=S.turnSeat;
+  for(let i=0;i<4;i++){
+    const s=seat;
+    setTimeout(()=>{
+      if(S.phase==='playing'&&S.hands[s]&&S.hands[s].length===1){
+        pC(s,S.hands[s][0]);
+      }
+    },delay);
+    delay+=700;
+    seat=SE[(SE.indexOf(seat)+1)%4];
+  }
 }
 
 function fA(){
@@ -872,18 +892,6 @@ function rTr(){
   }
 }
 
-function attachAlertClicks(container){
-  container.querySelectorAll('.auc-alert-td').forEach(td=>{
-    td.style.pointerEvents='all';
-    td.onclick=function(e){
-      e.stopPropagation();
-      const idx=parseInt(this.dataset.idx);
-      const entry=S.auction[idx];
-      if(entry&&entry.alert) showAlertPopup(fB(entry.bid),entry.alert);
-    };
-  });
-}
-
 function rAu(){
   const panel=document.getElementById('auc-panel');
   const overlay=document.getElementById('auc-overlay');
@@ -906,7 +914,8 @@ function rAu(){
     const myMark=hasAlert&&isMine?'<span style="color:#888;font-size:.7em">(我)</span>':'';
     const bidHtml=fB(entry.bid)+alertMark+myMark;
     if(hasAlert&&isOpp){
-      h+='<td class="auc-alert-td" data-idx="'+i+'" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
+      alertMap[i]={bidHtml:fB(entry.bid),msg:entry.alert};
+      h+='<td onclick="showAuctionAlert('+i+')" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
@@ -918,12 +927,10 @@ function rAu(){
     overlay.innerHTML=h;
     overlay.classList.add('show');
     panel.classList.add('hidden');
-    attachAlertClicks(overlay);
   } else {
     panel.innerHTML=h;
     panel.classList.remove('hidden');
     overlay.classList.remove('show');
-    attachAlertClicks(panel);
   }
 }
 
@@ -972,6 +979,11 @@ function uBB(){
 }
 
 let selectedBid=null;
+const alertMap={};  // idx -> {bidHtml, msg}
+window.showAuctionAlert=function(idx){
+  const e=alertMap[idx];
+  if(e)showAlertPopup(e.bidHtml,e.msg);
+};
 
 function bBG(){
   const g=document.getElementById('bidgrid');
