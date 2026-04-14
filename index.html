@@ -47,7 +47,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .plbl{padding:3px 10px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.72em;font-weight:700;color:var(--gold);white-space:nowrap}
 .plbl.on{outline:2px solid var(--accent);color:var(--accent)}
 .plbl.dummy-badge{color:#7ee8a2}
-.ptk{font-size:.6em;color:var(--text2)}
+.ptk{display:none}
 
 /* card rows — ALL zones horizontal */
 .cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:0}
@@ -73,18 +73,18 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .tc.pos-bottom{bottom:0;left:50%;transform:translateX(-50%)}
 .tc.pos-left  {top:50%; left:0; transform:translateY(-50%)}
 .tc.pos-right {top:50%; right:0;transform:translateY(-50%)}
-.cl{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);color:var(--gold);font-size:.82em;font-weight:700;background:rgba(0,0,0,.5);padding:2px 12px;border-radius:10px;pointer-events:none;white-space:nowrap}
+.cl{display:none}
 
 /* ── AUCTION: always-visible right panel + center overlay during bidding ── */
 #auc-panel{
   position:absolute;top:8px;right:8px;
   background:rgba(15,18,26,.92);border:1px solid #2a3040;border-radius:8px;
-  padding:6px 10px;min-width:155px;font-size:.68em;z-index:10;
+  padding:10px 16px;min-width:200px;font-size:.95em;z-index:10;
 }
 #auc-panel.hidden{display:none}
 #auc-panel table,#auc-overlay table{border-collapse:collapse;width:100%}
-#auc-panel th,#auc-overlay th{color:var(--gold);padding:2px 6px;border-bottom:1px solid #2a3040;font-weight:700;text-align:center}
-#auc-panel td,#auc-overlay td{padding:2px 6px;text-align:center}
+#auc-panel th,#auc-overlay th{color:var(--gold);padding:4px 10px;border-bottom:1px solid #2a3040;font-weight:700;text-align:center}
+#auc-panel td,#auc-overlay td{padding:4px 10px;text-align:center}
 
 #auc-overlay{
   display:none;position:absolute;top:200px;left:50%;transform:translateX(-50%);
@@ -96,10 +96,20 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 /* ── STATUS badge top-left ── */
 #status-badge{
   position:absolute;top:8px;left:8px;z-index:10;
-  background:rgba(0,0,0,.65);border-radius:6px;padding:5px 10px;
-  font-size:.7em;color:var(--text2);line-height:1.7;
+  background:rgba(0,0,0,.75);border-radius:8px;padding:8px 14px;
+  font-size:.95em;color:var(--text2);line-height:1.8;
 }
-.tbtn{padding:4px 9px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.7em}
+.tbtn{padding:6px 12px;background:var(--bg3);border:1px solid #333;color:var(--text2);border-radius:4px;cursor:pointer;font-size:.85em}
+
+/* ── Bottom-right contract + score info ── */
+#game-info{
+  position:absolute;bottom:10px;right:10px;z-index:10;
+  background:rgba(0,0,0,.75);border:1px solid #333;border-radius:8px;
+  padding:8px 16px;font-size:1em;font-weight:700;color:var(--text);
+  text-align:right;line-height:1.8;
+}
+#game-info .contract{color:var(--gold);font-size:1.1em}
+#game-info .tricks{color:var(--text2);font-size:.9em}
 .tbtn:hover{background:#2a3548}
 .tbtn.go{background:var(--felt);color:#fff;border-color:var(--felt)}
 
@@ -219,6 +229,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
       <button id="confirm-btn" onclick="confirmBid()" disabled>确认</button>
     </div>
   </div>
+  <div id="game-info" style="display:none"></div>
   <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
   <div id="hp"><h2>历史记录<button class="x" onclick="toggleHistory()">×</button></h2><div id="hl"></div></div>
 </div>
@@ -364,10 +375,11 @@ function onM(_,p){
 
   if(d.type==='hello'){
     peers[d._from]={seat:d.seat,name:d.name};
-    // hello only for initial announce; seat claiming is via take_seat
-    // Don't overwrite any seats here
     eH();
-    if(isHost)setTimeout(()=>ms({type:'full_state',state:S}),100);
+    // Always respond with full_state so new joiners get current game state
+    if(isHost){
+      ms({type:'full_state',state:S});
+    }
     cR();rA();
   }
   else if(d.type==='reconnect_claim'){
@@ -385,10 +397,13 @@ function onM(_,p){
     }
   }
   else if(d.type==='full_state'){
-    if(d._from===hostId&&!isHost){
+    // Accept from anyone claiming to be host (hostId may not be elected yet on new join)
+    if(!isHost){
       const h=S.history;
       S=d.state;
       if(h.length>S.history.length)S.history=h;
+      // Sync local trickProcessing: if currentTrick has 4 cards, we're in the delay window
+      trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
       rA();
     }
   }
@@ -841,7 +856,18 @@ function fB(b){
 }
 
 function rCl(){
-  document.getElementById('cl').textContent=(S.contract&&S.phase==='playing')?fC(S.contract):'';
+  document.getElementById('cl').textContent='';
+  const gi=document.getElementById('game-info');
+  if(!gi)return;
+  if(S.contract&&(S.phase==='playing'||S.phase==='scoring')){
+    const ds=(SE.indexOf(S.contract.declarer)%2===0)?'NS':'EW';
+    const other=ds==='NS'?'EW':'NS';
+    gi.style.display='block';
+    gi.innerHTML='<div class="contract">'+fC(S.contract)+'</div>'+
+      '<div class="tricks">'+ds+':'+S.trickWins[ds]+' '+other+':'+S.trickWins[other]+'</div>';
+  } else {
+    gi.style.display='none';
+  }
 }
 
 function fC(c){
