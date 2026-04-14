@@ -44,7 +44,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .pz.right {right:8px;top:0;bottom:0;flex-direction:column;justify-content:center}
 
 /* player label */
-.plbl{padding:3px 10px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.72em;font-weight:700;color:var(--gold);white-space:nowrap}
+.plbl{padding:4px 12px;border-radius:4px;background:rgba(0,0,0,.75);font-size:.95em;font-weight:700;color:var(--gold);white-space:nowrap}
 .plbl.on{outline:2px solid var(--accent);color:var(--accent)}
 .plbl.dummy-badge{color:#7ee8a2}
 .ptk{display:none}
@@ -82,9 +82,9 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   padding:10px 16px;min-width:200px;font-size:.95em;z-index:40;pointer-events:all;
 }
 #auc-panel.hidden{display:none}
-#auc-panel table,#auc-overlay table{border-collapse:collapse;width:100%}
+#auc-panel table,#auc-overlay table{border-collapse:collapse;width:100%;pointer-events:all}
 #auc-panel th,#auc-overlay th{color:var(--gold);padding:4px 10px;border-bottom:1px solid #2a3040;font-weight:700;text-align:center}
-#auc-panel td,#auc-overlay td{padding:4px 10px;text-align:center;pointer-events:all}
+#auc-panel td,#auc-overlay td{padding:4px 10px;text-align:center;pointer-events:all;cursor:default}
 
 #auc-overlay{
   display:none;position:absolute;top:200px;left:50%;transform:translateX(-50%);
@@ -174,7 +174,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 #alert-popup .ap-msg{color:var(--text);font-size:.88em;margin-top:6px;line-height:1.5}
 #alert-popup button{margin-top:10px;padding:5px 16px;background:var(--bg3);color:var(--text2);border:none;border-radius:5px;cursor:pointer;font-size:.8em}
 #bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
-.bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
+.bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s;transition:background .12s,color .12s}
 .bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
 .bb.pass{background:#3d4a5c;color:#aaa;padding:8px 10px;font-size:.82em}.bb.dbl{background:#8e3b3b;color:#fff;padding:8px 14px;font-size:.9em;font-weight:800}.bb.rdbl{background:#2b5ea0;color:#fff;padding:8px 10px;font-size:.9em;font-weight:800}.bb.selected{background:var(--accent)!important;color:#111!important;transform:scale(1.08)}
 #bact{display:flex;gap:4px;justify-content:center;margin-top:4px}
@@ -238,7 +238,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间</button>
+  <button onclick="joinGame()">进入房间（默认旁观）</button>
 </div>
 
 <!-- GAME -->
@@ -293,7 +293,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div class="bx">
     <h3>选择座位</h3>
     <div class="sg" id="seat-btns"></div>
-    <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
+    <button class="sbtn-cancel" onclick="closeSeatPick()">取消（继续旁观）</button>
   </div>
 </div>
 
@@ -564,10 +564,7 @@ function pB(seat,bid,alertMsg){
   }
   S.turnSeat=SE[(SE.indexOf(seat)+1)%4];
   rA();bS();
-  // Auto-play last trick if all players have exactly 1 card left
-  if(isHost&&S.trickWins.NS+S.trickWins.EW===6&&S.currentTrick.length===0){
-    autoPlayLastTrick();
-  }
+
 }
 
 function autoPlayLastTrick(){
@@ -632,6 +629,10 @@ function pC(seat,card){
       S.turnSeat=w;
       trickProcessing=false; // unlock
       if(S.trickWins.NS+S.trickWins.EW===7)eP();
+      else if(isHost&&S.trickWins.NS+S.trickWins.EW===6){
+        rA();bS();
+        autoPlayLastTrick();
+      }
       else{rA();bS();}
     },1200);
     return;
@@ -947,7 +948,7 @@ function rAu(){
     const bidHtml=fB(entry.bid)+alertMark+myMark;
     if(hasAlert&&isOpp){
       alertMap[i]={bidHtml:fB(entry.bid),msg:entry.alert};
-      h+='<td data-alert-idx="'+i+'" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
+      h+='<td data-alert-idx="'+i+'" onclick="showAuctionAlert('+i+')" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
@@ -982,8 +983,9 @@ function rCl(){
     const ds=(SE.indexOf(S.contract.declarer)%2===0)?'NS':'EW';
     const other=ds==='NS'?'EW':'NS';
     gi.style.display='block';
+    const need=TN[S.contract.level];
     gi.innerHTML='<div class="contract">'+fC(S.contract)+'</div>'+
-      '<div class="tricks">'+ds+':'+S.trickWins[ds]+' '+other+':'+S.trickWins[other]+'</div>';
+      '<div class="tricks">'+ds+':'+S.trickWins[ds]+'/'+need+' '+other+':'+S.trickWins[other]+'</div>';
   } else {
     gi.style.display='none';
   }
@@ -1030,10 +1032,11 @@ document.addEventListener('click',function(e){
 function bBG(){
   const g=document.getElementById('bidgrid');
   g.innerHTML='';
+  const suitColors={C:'#2ecc71',D:'#e67e22',H:'#e74c3c',S:'#ccc',NT:'#aaa'};
   for(let l of LV)for(let s of BS){
     const bid=l+s,btn=document.createElement('button');
     btn.className='bb';btn.dataset.bid=bid;
-    btn.innerHTML=s==='NT'?l+'NT':l+SY[s];
+    btn.innerHTML=s==='NT'?'<span>'+l+'NT</span>':'<span>'+l+'</span><span style="color:'+suitColors[s]+'">'+SY[s]+'</span>';
     btn.onclick=()=>selectBid(bid);
     g.appendChild(btn);
   }
