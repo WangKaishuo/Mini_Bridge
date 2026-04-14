@@ -16,16 +16,13 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
 :root{
-  --cw:min(7.5vw,104px);
-  --ch:min(10.9vw,152px);
-  --cf:min(1.6vw,1.6em);
-  --overlap:calc(var(--cw)*-0.19);
-  --lr-cw:min(5vw,70px);
-  --lr-ch:min(7.2vw,100px);
-  --lr-overlap:calc(var(--lr-cw)*-0.54);
+  --cw:min(5.8vw,72px);
+  --ch:min(8.4vw,104px);
+  --cf:min(1.4vw,1.3em);
   --tcw:min(4.2vw,58px);
   --tch:min(6.1vw,84px);
   --hand-h:calc(var(--ch) + 20px);
+  --card-gap:3px;
 }
 
 /* LOBBY */
@@ -52,6 +49,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .pz{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;overflow:visible;z-index:2;box-sizing:border-box}
 .pz.top   {top:8px;left:50%;transform:translateX(-50%)}
 .pz.bottom{bottom:calc(var(--hand-h) + 4px);left:50%;transform:translateX(-50%);flex-direction:column-reverse}
+.spectating .pz.bottom{bottom:8px}
 .pz.left  {left:8px;top:0;bottom:0;flex-direction:column;justify-content:center}
 .pz.right {right:8px;top:0;bottom:0;flex-direction:column;justify-content:center}
 
@@ -61,16 +59,15 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .plbl.dummy-badge{color:#7ee8a2}
 .ptk{display:none}
 
-/* card rows — ALL zones horizontal */
-.cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:0}
+/* card rows — ALL zones horizontal, flat layout */
+.cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:var(--card-gap)}
 
-/* All opponent cards same size, horizontal */
-.mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:var(--cw);height:var(--ch);font-size:var(--cf);margin-right:var(--overlap)}
-.pz.left .mc,.pz.right .mc{width:var(--lr-cw);height:var(--lr-ch);font-size:calc(var(--cf)*0.88);margin-right:var(--lr-overlap)}
+/* All opponent/dummy cards: uniform size, no overlap */
+.mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:var(--cw);height:var(--ch);font-size:var(--cf)}
 .mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
 .mc.b::after{content:'';display:block;width:55%;height:65%;border:1px solid rgba(255,255,255,.15);border-radius:3px}
 .mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5);position:relative;z-index:10}
-/* Left/right: vertical column, cards upright and readable */
+/* Left/right: horizontal row */
 .pz.left .cds{flex-direction:row}
 .pz.right .cds{flex-direction:row}
 
@@ -148,8 +145,8 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   background:none;
   overflow-x:auto;z-index:5;
 }
-.suit-grp{display:flex;gap:1px;margin:0}
-.myc{width:var(--cw);height:var(--ch);background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--cf);font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0;margin-right:var(--overlap)}
+.suit-grp{display:flex;gap:var(--card-gap);margin:0 4px}
+.myc{width:var(--cw);height:var(--ch);background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--cf);font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5);position:relative;z-index:10}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
 .myc .sym{font-size:1.2em}.myc .rk{font-size:1.4em;font-weight:800}
@@ -261,7 +258,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间（默认旁观）</button>
+  <button onclick="joinGame()">进入房间</button>
 </div>
 
 <!-- GAME -->
@@ -317,7 +314,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div class="bx">
     <h3>选择座位</h3>
     <div class="sg" id="seat-btns"></div>
-    <button class="sbtn-cancel" onclick="closeSeatPick()">取消（继续旁观）</button>
+    <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
   </div>
 </div>
 
@@ -333,25 +330,23 @@ const BS=['C','D','H','S','NT'],LV=[1,2,3,4];
 const TN={1:4,2:5,3:6,4:7};
 
 // Relative seat layout: given mySeat, what compass goes in each visual slot?
-// If no seat (spectator) default to standard N-top.
+// Spectators view from South perspective.
+function viewSeat(){return mySeat||'S';}
 function layoutFor(me){
   // Returns {top,bottom,left,right} compass seats
-  if(!me) return {top:'N',bottom:'S',left:'W',right:'E'};
-  const idx=SE.indexOf(me);
-  // bottom = me, top = opposite, left/right = the other two (bridge: LHO left)
+  const vs=me||'S';
+  const idx=SE.indexOf(vs);
   const opp=SE[(idx+2)%4];
-  const rho=SE[(idx+3)%4]; // RHO: visually on LEFT (e.g. for N: W is RHO... wait)
-  // Standard bridge table: facing partner across, East is to your LEFT, West to your RIGHT
-  // N faces S: left=E, right=W
-  const lho=SE[(idx+1)%4]; // E for N → visually LEFT
-  const rho2=SE[(idx+3)%4]; // W for N → visually RIGHT
-  return {bottom:me,top:opp,left:lho,right:rho2};
+  const lho=SE[(idx+1)%4];
+  const rho=SE[(idx+3)%4];
+  return {bottom:vs,top:opp,left:lho,right:rho};
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let myId=Math.random().toString(36).slice(2,10);
 let mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null,peers={};
 let hasState=false;
+let lastStateTime=0; // timestamp of last full_state received
 let trickProcessing=false; // FIX: anti-double-process lock
 let S={
   phase:'waiting',dealer:0,
@@ -361,7 +356,8 @@ let S={
   currentTrick:[],trickWins:{NS:0,EW:0},
   trickLead:null,turnSeat:null,dummy:null,
   boardNum:0,history:[],allHands:null,
-  dummyRevealed:false // FIX: only reveal dummy after opening lead
+  dummyRevealed:false, // FIX: only reveal dummy after opening lead
+  _v:0 // state version counter
 };
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -380,7 +376,7 @@ function sortHand(hand){
 
 // ─── MQTT ────────────────────────────────────────────────────────────────────
 function ms(msg){if(mq&&mq.connected){msg._from=myId;mq.publish(rt,JSON.stringify(msg));}}
-function bS(){if(isHost&&hasState)ms({type:'full_state',state:S});}
+function bS(){if(isHost&&hasState){S._v=(S._v||0)+1;ms({type:'full_state',state:S});}}
 
 // ─── Join ────────────────────────────────────────────────────────────────────
 window.joinGame=function(){
@@ -408,26 +404,41 @@ window.joinGame=function(){
     'wss://broker.hivemq.com:8884/mqtt',
   ];
   let brokerIdx=0;
+  let wasConnected=false; // true once we've successfully connected at least once
+  let reconnectTimer=null;
 
   function tryConnect(){
     const url=brokers[brokerIdx%brokers.length];
-    log('连接中 '+(brokerIdx+1)+'/'+brokers.length+'...');
+    log(wasConnected?'重连中...':'连接中 '+(brokerIdx+1)+'/'+brokers.length+'...');
+    if(mq){try{mq.end(true);}catch(e){}}
     mq=mqtt.connect(url,{clientId:'mb_'+myId,clean:true,keepalive:20,connectTimeout:8000,reconnectPeriod:0});
     mq.on('connect',()=>{
+      if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
       mq.subscribe(rt,e=>{
         if(e){log('订阅失败');return;}
-        log('已加入房间 '+rid);
+        const isReconnect=wasConnected;
+        wasConnected=true;
+        log(isReconnect?'已重连':'已加入房间 '+rid);
         peers[myId]={seat:mySeat,name:myName};
-        // 先广播hello，给现有host时间响应
-        if(mySeat&&savedOrigId&&savedOrigId!==myId){
-          ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:savedOrigId});
-        } else {
+
+        if(isReconnect){
+          // Reconnecting: reclaim seat and request state
+          if(mySeat){
+            ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:myId});
+          }
           ms({type:'hello',seat:mySeat,name:myName});
+        } else {
+          // First connect
+          if(mySeat&&savedOrigId&&savedOrigId!==myId){
+            ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:savedOrigId});
+          } else {
+            ms({type:'hello',seat:mySeat,name:myName});
+          }
         }
-        // 500ms后选举host：此时要么已收到full_state(hasState=true)，要么是第一人
+        // After a short delay, elect host and render
         setTimeout(()=>{
           eH();
-          if(isHost)hasState=true; // 第一个人，自己就是state的来源
+          if(isHost)hasState=true;
           rA();
         },500);
         bBG();
@@ -436,14 +447,60 @@ window.joinGame=function(){
     mq.on('message',onM);
     mq.on('error',()=>{});
     mq.on('close',()=>{
-      brokerIdx++;
-      if(brokerIdx<6){log('切换服务器重试...');setTimeout(tryConnect,1500);}
-      else log('连接失败，请刷新重试');
+      if(wasConnected){
+        // Was connected before — this is a mid-session disconnect
+        log('连接断开，正在重连...');
+        // Try same broker first, then alternate
+        reconnectTimer=setTimeout(()=>{
+          tryConnect();
+        },2000);
+        // If same broker fails after a few tries, switch
+        setTimeout(()=>{
+          if(mq&&!mq.connected){
+            brokerIdx++;
+            tryConnect();
+          }
+        },8000);
+      } else {
+        // Initial connection attempts
+        brokerIdx++;
+        if(brokerIdx<6){log('切换服务器重试...');setTimeout(tryConnect,1500);}
+        else log('连接失败，请刷新重试');
+      }
     });
   }
   tryConnect();
 
-  setInterval(()=>{if(mq&&mq.connected)ms({type:'ping',seat:mySeat,name:myName});},15000);
+  // Periodic ping: keeps connection alive AND lets host know we're still here
+  // If we detect we've been disconnected, the ping interval will catch it
+  setInterval(()=>{
+    if(mq&&mq.connected){
+      ms({type:'ping',seat:mySeat,name:myName});
+    } else if(wasConnected&&!reconnectTimer){
+      // Connection dropped without close event — force reconnect
+      log('连接异常，尝试重连...');
+      tryConnect();
+    }
+  },5000);
+
+  // Host heartbeat: broadcast full state every 3s so all clients stay synced
+  // Uses version counter — clients skip re-render if version unchanged
+  setInterval(()=>{
+    if(isHost&&hasState&&mq&&mq.connected){
+      bS();
+    }
+  },3000);
+
+  // Client sync request: if no state received in 8s during active game, ask for it
+  setInterval(()=>{
+    if(!isHost&&hasState&&mq&&mq.connected&&S.phase!=='waiting'){
+      if(Date.now()-lastStateTime>8000){
+        ms({type:'request_state'});
+      }
+    }
+    // Also refresh connection status display
+    rA();
+  },4000);
   const sv=localStorage.getItem('minibridge-history');
   if(sv)try{S.history=JSON.parse(sv);}catch(e){}
 };
@@ -457,7 +514,7 @@ function onM(_,p){
   if(d._from===myId)return;
 
   if(d.type==='hello'){
-    peers[d._from]={seat:d.seat,name:d.name};
+    peers[d._from]={seat:d.seat,name:d.name,lastSeen:Date.now()};
     const wasHost=isHost;
     eH();
     // 如果我是host，立即推送完整state给新人
@@ -487,7 +544,13 @@ function onM(_,p){
   else if(d.type==='full_state'){
     // Accept state from the host
     if(!isHost&&(hostId===d._from||!hostId)){
+      // Skip if we already have this version (heartbeat duplicate)
+      const newV=d.state._v||0;
+      const oldV=S._v||0;
+      if(hasState&&newV<=oldV&&newV>0){lastStateTime=Date.now();return;}
+
       hasState=true;
+      lastStateTime=Date.now();
       const h=S.history;
       S=d.state;
       if(h.length>S.history.length)S.history=h;
@@ -495,8 +558,6 @@ function onM(_,p){
       trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
 
       // Reconcile mySeat with host's authoritative player map:
-      // If I think I have a seat, but host says someone else is there, I lose it.
-      // If host says I'm in a different seat, follow host.
       let hostSaysMyeSeat=null;
       for(const s of SE){
         if(S.players[s]&&S.players[s].peerId===myId){
@@ -505,7 +566,6 @@ function onM(_,p){
         }
       }
       if(mySeat&&hostSaysMyeSeat!==mySeat){
-        // Host doesn't agree with my seat — trust host
         mySeat=hostSaysMyeSeat;
         peers[myId]={seat:mySeat,name:myName};
         const sv2=sessionStorage.getItem('mb-session');
@@ -580,9 +640,39 @@ function onM(_,p){
   else if(d.type==='chat'){appendChat(d);}
   else if(d.type==='ping'){
     peers[d._from]=peers[d._from]||{seat:d.seat,name:d.name};
+    peers[d._from].lastSeen=Date.now();
     eH();
   }
+  else if(d.type==='request_state'){
+    // A client is asking for current state — host responds
+    if(isHost&&hasState)bS();
+  }
 }
+
+// ─── Peer liveness: detect if host has gone silent ──────────────────────────
+// Track lastSeen for all peers; if peer hasn't pinged in 20s, remove and re-elect
+setInterval(()=>{
+  const now=Date.now();
+  let changed=false;
+  for(const pid of Object.keys(peers)){
+    if(pid===myId)continue;
+    if(peers[pid].lastSeen&&now-peers[pid].lastSeen>20000){
+      delete peers[pid];
+      changed=true;
+    }
+  }
+  if(changed){
+    const wasHost=isHost;
+    eH();
+    if(isHost&&!wasHost){
+      // I just became host because old host disappeared
+      hasState=true;
+      log('房主切换');
+      bS();
+    }
+    rA();
+  }
+},6000);
 
 // ─── Game logic ───────────────────────────────────────────────────────────────
 function cR(){if(SE.filter(s=>S.players[s]).length===4&&S.phase==='waiting')sNB();}
@@ -845,10 +935,12 @@ function uTB(){
   const b=document.getElementById('ib'),sb=document.getElementById('sbtn');
   const sp=document.getElementById('seat-prompt');
   const sc2=SE.filter(s=>S.players[s]).length;
-  if(S.phase==='waiting')b.textContent=(Object.keys(peers).length>1?'已连接'+(Object.keys(peers).length-1)+'人 · ':'等待玩家 · ')+sc2+'/4就座'+(mySeat?' · 我:'+SN[mySeat]:'')+(isHost?' · 房主':'');
-  else if(S.phase==='bidding')b.textContent='第'+S.boardNum+'局 · 叫牌轮到 '+SN[S.turnSeat]+(mySeat?' · 我:'+SN[mySeat]:'');
-  else if(S.phase==='playing')b.textContent='第'+S.boardNum+'局 · '+fC(S.contract)+' · 轮到 '+SN[S.turnSeat];
-  else b.textContent='第'+S.boardNum+'局 · 结束';
+  const disconnected=!mq||!mq.connected;
+  const dcTag=disconnected?' ⚠️ 断线重连中':'';
+  if(S.phase==='waiting')b.textContent=(Object.keys(peers).length>1?'已连接'+(Object.keys(peers).length-1)+'人 · ':'等待玩家 · ')+sc2+'/4就座'+(mySeat?' · 我:'+SN[mySeat]:' · 旁观中')+(isHost?' · 房主':'')+dcTag;
+  else if(S.phase==='bidding')b.textContent='第'+S.boardNum+'局 · 叫牌轮到 '+SN[S.turnSeat]+(mySeat?' · 我:'+SN[mySeat]:' · 旁观中')+dcTag;
+  else if(S.phase==='playing')b.textContent='第'+S.boardNum+'局 · '+fC(S.contract)+' · 轮到 '+SN[S.turnSeat]+(!mySeat?' · 旁观中':'')+dcTag;
+  else b.textContent='第'+S.boardNum+'局 · 结束'+(!mySeat?' · 旁观中':'')+dcTag;
   if(sb)sb.style.display=(S.phase==='waiting'&&isHost&&sc2>=2)?'inline-block':'none';
   // Show centered seat prompt only when spectating, game not started, AND we have state
   if(sp)sp.classList.toggle('show',!mySeat&&S.phase==='waiting'&&hasState);
@@ -857,7 +949,7 @@ function uTB(){
 
 // Map compass seat to visual position slot
 function posOf(compassSeat){
-  const lay=layoutFor(mySeat);
+  const lay=layoutFor(viewSeat());
   for(const[pos,cs] of Object.entries(lay))if(cs===compassSeat)return pos;
   return 'top';
 }
@@ -868,7 +960,8 @@ function trickPos(compassSeat){
 }
 
 function rTable(){
-  const lay=layoutFor(mySeat); // {top,bottom,left,right} → compass seat
+  const lay=layoutFor(viewSeat()); // {top,bottom,left,right} → compass seat
+  const isSpectator=!mySeat;
   for(const[pos,seat] of Object.entries(lay)){
     const lblEl=document.getElementById('lbl-'+pos);
     const cdsEl=document.getElementById('cds-'+pos);
@@ -877,7 +970,7 @@ function rTable(){
 
     const p=S.players[seat];
     const isDummy=S.dummy===seat;
-    const isMe=mySeat===seat;
+    const isMe=mySeat===seat; // false for spectators (mySeat is null)
 
     // Label
     let lblTxt=SN[seat]+(p?' '+p.name:' (空位)');
@@ -890,31 +983,26 @@ function rTable(){
 
     // Cards
     cdsEl.innerHTML='';
-    if(isMe) continue; // my hand rendered in btm bar
+    if(isMe) continue; // my hand rendered in btm bar (only for seated players)
 
     const hand=S.hands[seat]||[];
 
     // Visibility rules:
-    // - Declarer can always see dummy's hand once revealed
-    // - Everyone sees dummy after dummyRevealed
-    // - Scoring phase: everyone sees all
     const amDeclarer=!!(S.contract&&mySeat===S.contract.declarer);
     const amDummy=!!(S.contract&&mySeat===S.dummy);
-    const isSpectator=!mySeat;
     const isDeclarer=(seat===S.contract?.declarer);
     const canSee=isSpectator||
                  (S.phase==='scoring')||
                  (isDummy&&S.dummyRevealed)||
                  (isDeclarer&&amDummy&&S.dummyRevealed);
 
-    // Can declarer click dummy's cards?
+    // Can declarer click dummy's cards? (never for spectator)
     const isDummyPlayable=!!(S.contract&&amDeclarer&&isDummy&&S.dummyRevealed&&S.turnSeat===seat&&S.phase==='playing'&&!trickProcessing);
 
     // Sort dummy hand for display (already sorted on deal, maintain)
     // Render by suit groups for dummy (face-up), stacked for opponents (face-down)
     if(canSee){
-      // Render dummy hand: suit groups, no gap within suit, small gap between suits
-      cdsEl.style.gap='0';
+      // Render face-up hand: suit groups with small spacer between suits
       const bySuit={S:[],H:[],D:[],C:[]};
       for(const c of hand)bySuit[c.suit].push(c);
       const suitOrder=['S','H','D','C'];
@@ -951,9 +1039,6 @@ function rTable(){
         cdsEl.appendChild(d);
       }
     }
-    // Remove negative margin from last card so it doesn't clip
-    const lastMc=cdsEl.querySelector('.mc:last-child');
-    if(lastMc)lastMc.style.marginRight='0';
   }
 }
 
@@ -997,9 +1082,6 @@ function rMH(){
     }
     el.appendChild(grp);
   }
-  // Remove negative margin from last card
-  const lastMyc=el.querySelector('.myc:last-child');
-  if(lastMyc)lastMyc.style.marginRight='0';
 }
 
 function iLP(seat,card){
@@ -1032,27 +1114,29 @@ function rAu(){
   let h='<table><tr>';
   for(let i=0;i<4;i++)h+='<th>'+SN[SE[(S.dealer+i)%4]]+'</th>';
   h+='</tr><tr>';
+  const isSpectator=!mySeat;
   for(let i=0;i<S.auction.length;i++){
     const entry=S.auction[i];
     const hasAlert=!!entry.alert;
     const isMine=entry.seat===mySeat;
     const isPartner=mySeat&&!isMine&&(SE.indexOf(entry.seat)%2)===(SE.indexOf(mySeat)%2);
-    const isOpp=!isMine&&!isPartner;
-    const isSpectator=!mySeat;
-    // Show alert mark to opponents (and self) if alert exists
-    const alertMark=hasAlert&&(isOpp||isMine)?'<span style="color:#ffb347;font-size:.8em">❗</span>':'';
+    const isOpp=mySeat&&!isMine&&!isPartner;
+    const isNonTrivialBid=entry.bid!=='Pass';
+
+    // Alert mark: spectator sees all, players see opp and own
+    const showMark=hasAlert&&(isSpectator||isOpp||isMine);
+    const alertMark=showMark?'<span style="color:#ffb347;font-size:.8em">❗</span>':'';
     const myMark=hasAlert&&isMine?'<span style="color:#888;font-size:.7em">(我)</span>':'';
     const bidHtml=fB(entry.bid)+alertMark+myMark;
-    const isNonTrivialBid=entry.bid!=='Pass';
-    if(isOpp&&isNonTrivialBid){
-      // Opponent's non-Pass bid: always clickable
-      // If has alert → show explanation; if no alert → request explanation
-      const safeMsg=hasAlert?(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'):'';
-      h+='<td data-auc-idx="'+i+'" data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" data-bid-seat="'+entry.seat+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted '+(hasAlert?'#ffb347':'#666')+'">'+bidHtml+'</td>';
-    } else if(isSpectator&&isNonTrivialBid&&hasAlert){
-      // Spectator can view existing alerts
+
+    if(isSpectator&&isNonTrivialBid&&hasAlert){
+      // Spectator: can click any alerted bid to view explanation
       const safeMsg=(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
       h+='<td data-auc-idx="'+i+'" data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" data-bid-seat="'+entry.seat+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
+    } else if(isOpp&&isNonTrivialBid){
+      // Opponent's non-Pass bid: always clickable for players
+      const safeMsg=hasAlert?(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'):'';
+      h+='<td data-auc-idx="'+i+'" data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" data-bid-seat="'+entry.seat+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted '+(hasAlert?'#ffb347':'#666')+'">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
