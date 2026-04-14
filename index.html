@@ -225,6 +225,22 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 
 /* Seat picker */
 #seat-pick{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;align-items:center;justify-content:center}
+
+/* Explain request prompt (shown to bidder when opponent asks for explanation) */
+#explain-prompt{
+  display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:202;
+  background:rgba(20,14,0,.97);border:1px solid var(--gold);border-radius:10px;
+  padding:16px 20px;width:min(320px,90vw);box-shadow:0 4px 20px rgba(0,0,0,.6);
+}
+#explain-prompt.show{display:block}
+#explain-prompt .ep-title{color:var(--gold);font-size:.82em;font-weight:700;margin-bottom:6px}
+#explain-prompt .ep-bid{color:var(--accent);font-size:1.1em;font-weight:800;margin-bottom:8px}
+#explain-prompt input{width:100%;padding:8px 10px;border:1px solid #555;border-radius:6px;background:#111;color:var(--text);font-size:.85em;outline:none;box-sizing:border-box}
+#explain-prompt input:focus{border-color:var(--accent)}
+#explain-prompt .ep-btns{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+#explain-prompt .ep-btns button{padding:6px 14px;border:none;border-radius:5px;cursor:pointer;font-size:.82em;font-weight:600}
+#explain-prompt .ep-send{background:var(--gold);color:#111}
+#explain-prompt .ep-skip{background:var(--bg3);color:var(--text2)}
 #seat-pick.show{display:flex}
 #seat-pick .bx{background:var(--bg2);border:2px solid var(--bg3);border-radius:14px;padding:20px 26px;text-align:center;width:min(320px,90vw)}
 #seat-pick h3{color:var(--gold);margin-bottom:14px;font-size:.95em}
@@ -291,6 +307,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   </div>
   <div id="alert-toast"><div class="at-label">❗ Alert</div><div class="at-bid" id="at-bid"></div><div class="at-msg" id="at-msg"></div></div>
   <div id="alert-popup"><div class="ap-title">❗ Alert 说明</div><div class="ap-bid" id="ap-bid"></div><div class="ap-msg" id="ap-msg"></div><button onclick="closeAlertPopup()">关闭</button></div>
+  <div id="explain-prompt"><div class="ep-title">🔍 对手请求解释你的叫品</div><div class="ep-bid" id="ep-bid"></div><input id="ep-input" placeholder="输入这个叫品的含义..." maxlength="80" onkeydown="if(event.key==='Enter')submitExplain()"><div class="ep-btns"><button class="ep-skip" onclick="submitExplain('')">跳过</button><button class="ep-send" onclick="submitExplain()">发送</button></div></div>
   <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
   <div id="hp"><h2>历史记录<button class="x" onclick="toggleHistory()">×</button></h2><div id="hl"></div></div>
 </div>
@@ -334,6 +351,7 @@ function layoutFor(me){
 // ─── State ───────────────────────────────────────────────────────────────────
 let myId=Math.random().toString(36).slice(2,10);
 let mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null,peers={};
+let hasState=false;
 let trickProcessing=false; // FIX: anti-double-process lock
 let S={
   phase:'waiting',dealer:0,
@@ -362,7 +380,7 @@ function sortHand(hand){
 
 // ─── MQTT ────────────────────────────────────────────────────────────────────
 function ms(msg){if(mq&&mq.connected){msg._from=myId;mq.publish(rt,JSON.stringify(msg));}}
-function bS(){if(isHost)ms({type:'full_state',state:S});}
+function bS(){if(isHost&&hasState)ms({type:'full_state',state:S});}
 
 // ─── Join ────────────────────────────────────────────────────────────────────
 window.joinGame=function(){
@@ -400,14 +418,19 @@ window.joinGame=function(){
         if(e){log('订阅失败');return;}
         log('已加入房间 '+rid);
         peers[myId]={seat:mySeat,name:myName};
-        eH();
+        // 先广播hello，给现有host时间响应
         if(mySeat&&savedOrigId&&savedOrigId!==myId){
           ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:savedOrigId});
         } else {
-          // 不写本地S，等host广播full_state
           ms({type:'hello',seat:mySeat,name:myName});
         }
-        rA();bBG();
+        // 500ms后选举host：此时要么已收到full_state(hasState=true)，要么是第一人
+        setTimeout(()=>{
+          eH();
+          if(isHost)hasState=true; // 第一个人，自己就是state的来源
+          rA();
+        },500);
+        bBG();
       });
     });
     mq.on('message',onM);
@@ -435,9 +458,15 @@ function onM(_,p){
 
   if(d.type==='hello'){
     peers[d._from]={seat:d.seat,name:d.name};
+    const wasHost=isHost;
     eH();
+    // 如果我是host，立即推送完整state给新人
     if(isHost){
       ms({type:'full_state',state:S});
+    }
+    // 如果我刚成为host（原host离开），广播state
+    if(isHost&&!wasHost){
+      bS();
     }
     cR();rA();
   }
@@ -448,20 +477,41 @@ function onM(_,p){
       if(prev){
         S.players[prev]={peerId:d._from,name:d.name};
         peers[d._from]={seat:prev,name:d.name};
-        bS();
+        rA();bS();
       } else if(d.seat&&!S.players[d.seat]){
         S.players[d.seat]={peerId:d._from,name:d.name};
-        bS();
+        rA();bS();
       }
     }
   }
   else if(d.type==='full_state'){
-    if(!isHost){
+    // Accept state from the host
+    if(!isHost&&(hostId===d._from||!hostId)){
+      hasState=true;
       const h=S.history;
       S=d.state;
       if(h.length>S.history.length)S.history=h;
       if(S.dummyRevealed===undefined)S.dummyRevealed=false;
       trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
+
+      // Reconcile mySeat with host's authoritative player map:
+      // If I think I have a seat, but host says someone else is there, I lose it.
+      // If host says I'm in a different seat, follow host.
+      let hostSaysMyeSeat=null;
+      for(const s of SE){
+        if(S.players[s]&&S.players[s].peerId===myId){
+          hostSaysMyeSeat=s;
+          break;
+        }
+      }
+      if(mySeat&&hostSaysMyeSeat!==mySeat){
+        // Host doesn't agree with my seat — trust host
+        mySeat=hostSaysMyeSeat;
+        peers[myId]={seat:mySeat,name:myName};
+        const sv2=sessionStorage.getItem('mb-session');
+        if(sv2)try{const o=JSON.parse(sv2);o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
+      }
+
       // Show toast for newly arrived alerted bids from opponents
       if(S.phase==='bidding'){
         const lastEntry=S.auction[S.auction.length-1];
@@ -488,30 +538,44 @@ function onM(_,p){
   else if(d.type==='request_deal'){if(isHost)sNB();}
   else if(d.type==='take_seat'){
     if(isHost){
+      // Game in progress: reject all seat changes (except waiting phase)
+      if(S.phase!=='waiting'){bS();return;}
       if(d.seat){
         const occ=S.players[d.seat];
-        // 游戏进行中禁止任何座位变更（除了重连认领）
-        if(S.phase!=='waiting'){bS();return;}
-        // 座位已被他人占用：拒绝
+        // Seat occupied by someone else: reject, send current state back
         if(occ&&occ.peerId!==d._from){bS();return;}
-        // 先清除该peer的其他座位
+        // Clear this peer from any other seat first
         for(const s of SE){
           if(s!==d.seat&&S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
         }
         S.players[d.seat]={peerId:d._from,name:d.name};
       } else {
-        // 旁观：清除该peer所有座位
-        if(S.phase!=='waiting'){bS();return;}
+        // Going spectator: clear this peer from all seats
         for(const s of SE){
           if(S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
         }
       }
-      bS();
+      // Always broadcast so everyone gets the authoritative update
+      rA();bS();
     }
   }
   else if(d.type==='alert_explain'){
-    // Opponent clicked a bid to see its alert explanation
+    // Opponent clicked a bid to see its alert explanation (legacy)
     showAlertPopup(d.bidStr,d.msg||'（无说明）');
+  }
+  else if(d.type==='request_explain'){
+    // Someone is asking me to explain one of my bids
+    // Check: is this bid mine?
+    if(d.seat===mySeat&&S.auction[d.aucIdx]){
+      showExplainPrompt(d.aucIdx,d.bid,d.fromName||'对手');
+    }
+  }
+  else if(d.type==='provide_explain'){
+    // Bidder provided an explanation — host writes it into auction
+    if(isHost&&d.aucIdx!=null&&S.auction[d.aucIdx]&&d.msg){
+      S.auction[d.aucIdx].alert=d.msg;
+      rA();bS();
+    }
   }
   else if(d.type==='chat'){appendChat(d);}
   else if(d.type==='ping'){
@@ -524,6 +588,7 @@ function onM(_,p){
 function cR(){if(SE.filter(s=>S.players[s]).length===4&&S.phase==='waiting')sNB();}
 
 function sNB(){
+  hasState=true;
   trickProcessing=false;
   S.boardNum++;
   S.dealer=(S.boardNum===1)?0:(S.dealer+1)%4;
@@ -695,6 +760,11 @@ function rB(sc2,ct,dt){
 
 // ─── Seat management ─────────────────────────────────────────────────────────
 window.showSeatPick=function(){
+  // If we haven't received authoritative state yet, warn
+  if(!hasState&&!isHost){
+    alert('正在同步房间状态，请稍候再试');
+    return;
+  }
   const el=document.getElementById('seat-pick');
   const bg=document.getElementById('seat-btns');
   bg.innerHTML='';
@@ -713,8 +783,8 @@ window.showSeatPick=function(){
       const mine=occ&&occ.peerId===myId;
       b.textContent=SN[s]+(occ?' ('+occ.name+')':'（空）');
       if(mine)b.style.outline='2px solid var(--accent)';
-      // 游戏中禁止换座，或座位被他人占
-      if(inGame||( occ&&!mine))b.disabled=true;
+      // Disable if: game in progress, OR seat taken by someone else
+      if(inGame||(occ&&!mine))b.disabled=true;
       b.onclick=()=>{takeSeat(s);closeSeatPick();};
     }
     bg.appendChild(b);
@@ -730,24 +800,34 @@ window.showSeatPick=function(){
 window.closeSeatPick=function(){document.getElementById('seat-pick').classList.remove('show');};
 
 function takeSeat(seat){
-  mySeat=seat;
-  // Update session
+  // Update session storage for reconnection
   const sv2=sessionStorage.getItem('mb-session');
-  if(sv2)try{const o=JSON.parse(sv2);o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
-  peers[myId]={seat:mySeat,name:myName};
+  if(sv2)try{const o=JSON.parse(sv2);o.mySeat=seat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
 
   if(isHost){
-    // Apply directly: evict self from all seats, then take new seat
+    // Host applies directly: evict self from all seats, then take new seat
     for(const s of SE){if(S.players[s]&&S.players[s].peerId===myId)S.players[s]=null;}
-    if(mySeat){
-      if(!S.players[mySeat])S.players[mySeat]={peerId:myId,name:myName};
+    if(seat){
+      // Double-check: seat might have been taken between showing picker and clicking
+      if(S.players[seat]&&S.players[seat].peerId!==myId){
+        // Seat was grabbed by someone else — refuse, refresh UI
+        rA();return;
+      }
+      S.players[seat]={peerId:myId,name:myName};
     }
-    bS();
+    mySeat=seat;
+    peers[myId]={seat:mySeat,name:myName};
+    bS(); // broadcast authoritative state to everyone
+    rA();
   } else {
-    // Send to host — host is authoritative
+    // Non-host: set mySeat optimistically for local layout rotation,
+    // but do NOT touch S.players — host is the single source of truth.
+    // Host will broadcast full_state which updates S.players for everyone.
+    mySeat=seat;
+    peers[myId]={seat:mySeat,name:myName};
     ms({type:'take_seat',seat:mySeat,name:myName});
+    rA(); // re-render with new perspective (layout rotation) but S.players unchanged
   }
-  rA();
 }
 
 // ─── Manual start ─────────────────────────────────────────────────────────────
@@ -770,8 +850,8 @@ function uTB(){
   else if(S.phase==='playing')b.textContent='第'+S.boardNum+'局 · '+fC(S.contract)+' · 轮到 '+SN[S.turnSeat];
   else b.textContent='第'+S.boardNum+'局 · 结束';
   if(sb)sb.style.display=(S.phase==='waiting'&&isHost&&sc2>=2)?'inline-block':'none';
-  // Show centered seat prompt only when spectating and game not started
-  if(sp)sp.classList.toggle('show',!mySeat&&S.phase==='waiting');
+  // Show centered seat prompt only when spectating, game not started, AND we have state
+  if(sp)sp.classList.toggle('show',!mySeat&&S.phase==='waiting'&&hasState);
   document.getElementById('board').classList.toggle('spectating',!mySeat);
 }
 
@@ -958,12 +1038,21 @@ function rAu(){
     const isMine=entry.seat===mySeat;
     const isPartner=mySeat&&!isMine&&(SE.indexOf(entry.seat)%2)===(SE.indexOf(mySeat)%2);
     const isOpp=!isMine&&!isPartner;
+    const isSpectator=!mySeat;
+    // Show alert mark to opponents (and self) if alert exists
     const alertMark=hasAlert&&(isOpp||isMine)?'<span style="color:#ffb347;font-size:.8em">❗</span>':'';
     const myMark=hasAlert&&isMine?'<span style="color:#888;font-size:.7em">(我)</span>':'';
     const bidHtml=fB(entry.bid)+alertMark+myMark;
-    if(hasAlert&&isOpp){
+    const isNonTrivialBid=entry.bid!=='Pass';
+    if(isOpp&&isNonTrivialBid){
+      // Opponent's non-Pass bid: always clickable
+      // If has alert → show explanation; if no alert → request explanation
+      const safeMsg=hasAlert?(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'):'';
+      h+='<td data-auc-idx="'+i+'" data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" data-bid-seat="'+entry.seat+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted '+(hasAlert?'#ffb347':'#666')+'">'+bidHtml+'</td>';
+    } else if(isSpectator&&isNonTrivialBid&&hasAlert){
+      // Spectator can view existing alerts
       const safeMsg=(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      h+='<td data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
+      h+='<td data-auc-idx="'+i+'" data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" data-bid-seat="'+entry.seat+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
@@ -1032,7 +1121,17 @@ const alertMap={};  // idx -> {bidHtml, msg}
 window.handleAlertTd=function(td){
   const msg=td.getAttribute('data-alert-msg');
   const bid=td.getAttribute('data-alert-bid');
-  showAlertPopup(fB(bid),msg||'（无说明）');
+  const aucIdx=parseInt(td.getAttribute('data-auc-idx'));
+  const bidSeat=td.getAttribute('data-bid-seat');
+  if(msg){
+    // Alert exists — show it
+    showAlertPopup(fB(bid),msg);
+  } else {
+    // No alert — send request to the bidder to explain
+    ms({type:'request_explain',aucIdx:aucIdx,bid:bid,seat:bidSeat,fromName:myName});
+    // Show a brief toast to let requester know the request was sent
+    showAlertToast(SN[bidSeat]+' '+fB(bid),'已请求对方解释，等待回复...');
+  }
 };
 
 function bBG(){
@@ -1102,6 +1201,37 @@ function showAlertPopup(bidStr,msg){
   document.getElementById('ap-msg').textContent=msg;
   document.getElementById('alert-popup').classList.add('show');
 };
+
+// ─── Explain request system ──────────────────────────────────────────────────
+let pendingExplainIdx=null; // auction index we're being asked to explain
+window.submitExplain=function(skip){
+  const el=document.getElementById('explain-prompt');
+  const input=document.getElementById('ep-input');
+  const msg=(skip==='')?'':input.value.trim();
+  el.classList.remove('show');
+  if(pendingExplainIdx===null)return;
+  const idx=pendingExplainIdx;
+  pendingExplainIdx=null;
+  input.value='';
+  if(!msg&&skip==='')return; // skipped, do nothing
+  // Send explanation to host (or apply directly if host)
+  if(isHost){
+    if(S.auction[idx]){
+      S.auction[idx].alert=msg;
+      rA();bS();
+    }
+  } else {
+    ms({type:'provide_explain',aucIdx:idx,msg:msg});
+  }
+};
+function showExplainPrompt(aucIdx,bid,fromName){
+  pendingExplainIdx=aucIdx;
+  document.getElementById('ep-bid').innerHTML=fB(bid)+' <span style="color:var(--text2);font-size:.7em">('+fromName+' 请求解释)</span>';
+  const input=document.getElementById('ep-input');
+  input.value='';
+  document.getElementById('explain-prompt').classList.add('show');
+  setTimeout(()=>input.focus(),100);
+}
 
 // ─── Chat ────────────────────────────────────────────────────────────────────
 window.toggleChat=function(){
