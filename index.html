@@ -22,7 +22,6 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   --tcw:min(4.2vw,58px);
   --tch:min(6.1vw,84px);
   --hand-h:calc(var(--ch) + 20px);
-  --card-gap:3px;
 }
 
 /* LOBBY */
@@ -60,7 +59,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .ptk{display:none}
 
 /* card rows — ALL zones horizontal, flat layout */
-.cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:var(--card-gap)}
+.cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:0}
 
 /* All opponent/dummy cards: uniform size, no overlap */
 .mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:var(--cw);height:var(--ch);font-size:var(--cf)}
@@ -145,7 +144,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   background:none;
   overflow-x:auto;z-index:5;
 }
-.suit-grp{display:flex;gap:var(--card-gap);margin:0}
+.suit-grp{display:flex;gap:0;margin:0}
 .myc{width:var(--cw);height:var(--ch);background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--cf);font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5);position:relative;z-index:10}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
@@ -529,6 +528,7 @@ function onM(_,p){
     if(newV>0&&newV<=oldV)return;
 
     // Accept state
+    const prevPhase=S.phase;
     const h=S.history;
     S=d.state;
     if(h.length>S.history.length)S.history=h;
@@ -538,6 +538,11 @@ function onM(_,p){
     // Derive mySeat from authoritative S.players — NEVER set it any other way
     syncMySeat();
     rA();
+
+    // Show score popup when phase transitions to scoring
+    if(S.phase==='scoring'&&prevPhase!=='scoring'){
+      showScoreFromState();
+    }
   }
 
   // ── Actions: only host processes these ──
@@ -908,35 +913,20 @@ function rTable(){
     // Sort dummy hand for display (already sorted on deal, maintain)
     // Render by suit groups for dummy (face-up), stacked for opponents (face-down)
     if(canSee){
-      // Render face-up hand: suit groups with small spacer between suits
-      const bySuit={S:[],H:[],D:[],C:[]};
-      for(const c of hand)bySuit[c.suit].push(c);
-      const suitOrder=['S','H','D','C'];
-      let firstSuit=true;
-      for(const su of suitOrder){
-        const cards=bySuit[su];
-        if(!cards.length)continue;
-        // Small spacer between suits (not within)
-        if(!firstSuit){
-          const sep=document.createElement('div');
-          sep.style.cssText='width:0;flex-shrink:0';
-          cdsEl.appendChild(sep);
+      // Render face-up hand: flat, no gaps
+      for(const card of hand){
+        const d=document.createElement('div');
+        d.className='mc f '+sc(card.suit);
+        d.innerHTML='<span>'+SY[card.suit]+'</span><span>'+card.rank+'</span>';
+        if(isDummyPlayable&&iLP(seat,card)){
+          d.classList.add('playable');
+          d.onclick=((st,cd)=>()=>{
+            if(!trickProcessing){
+              if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});
+            }
+          })(seat,card);
         }
-        firstSuit=false;
-        for(const card of cards){
-          const d=document.createElement('div');
-          d.className='mc f '+sc(card.suit);
-          d.innerHTML='<span>'+SY[card.suit]+'</span><span>'+card.rank+'</span>';
-          if(isDummyPlayable&&iLP(seat,card)){
-            d.classList.add('playable');
-            d.onclick=((st,cd)=>()=>{
-              if(!trickProcessing){
-                if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});
-              }
-            })(seat,card);
-          }
-          cdsEl.appendChild(d);
-        }
+        cdsEl.appendChild(d);
       }
     } else {
       for(let i=0;i<hand.length;i++){
@@ -959,34 +949,19 @@ function rMH(){
   const isDummy=S.dummy===mySeat;
   const isMyTurn=S.turnSeat===mySeat&&S.phase==='playing'&&!isDummy&&!trickProcessing;
 
-  // Group by suit: S H D C (high→low within each)
-  const bySuit={S:[],H:[],D:[],C:[]};
-  for(const c of hand)bySuit[c.suit].push(c);
-  const suitOrder=['S','H','D','C'];
-
-  let first=true;
-  for(const su of suitOrder){
-    const cards=bySuit[su];
-    if(!cards.length)continue;
-    
-    first=false;
-    const grp=document.createElement('div');
-    grp.className='suit-grp';
-    for(const card of cards){
-      const d=document.createElement('div');
-      d.className='myc '+sc(card.suit);
-      d.innerHTML='<span class="sym">'+SY[card.suit]+'</span><span class="rk">'+card.rank+'</span>';
-      if(isMyTurn&&iLP(mySeat,card)){
-        d.classList.add('playable');
-        d.onclick=((st,cd)=>()=>{
-          if(!trickProcessing){
-            if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});
-          }
-        })(mySeat,card);
-      }
-      grp.appendChild(d);
+  for(const card of hand){
+    const d=document.createElement('div');
+    d.className='myc '+sc(card.suit);
+    d.innerHTML='<span class="sym">'+SY[card.suit]+'</span><span class="rk">'+card.rank+'</span>';
+    if(isMyTurn&&iLP(mySeat,card)){
+      d.classList.add('playable');
+      d.onclick=((st,cd)=>()=>{
+        if(!trickProcessing){
+          if(isHost)pC(st,cd);else ms({type:'play_card',seat:st,card:cd});
+        }
+      })(mySeat,card);
     }
-    el.appendChild(grp);
+    el.appendChild(d);
   }
 }
 
@@ -1263,6 +1238,18 @@ function sS(t,det,sc2){
   v.textContent=sc2===0?'—':(sc2>0?'+'+sc2:''+sc2);
   v.style.color=sc2>=0?'#2ecc71':'#e74c3c';
   document.getElementById('spop').classList.add('show');
+}
+// Reconstruct and show score popup from current state (for non-host clients)
+function showScoreFromState(){
+  if(!S.contract){
+    sS('全Pass','本局流局',0);
+    return;
+  }
+  const c=S.contract;
+  const ds=(SE.indexOf(c.declarer)%2===0)?'NS':'EW';
+  const dt=S.trickWins[ds];
+  const nd=TN[c.level],made=dt-nd,score=cSc(c,made);
+  sS(fC(c),'庄家: '+SN[c.declarer]+' · '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' · '+dt+'/7墩',score);
 }
 window.closeScore=function(){
   document.getElementById('spop').classList.remove('show');
