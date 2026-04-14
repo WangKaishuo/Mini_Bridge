@@ -144,7 +144,35 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .ss{color:#111}.sh{color:var(--red)}.sd{color:#d05000}.sc{color:#1a7a42}
 
 /* ── BID BOX right-side panel ── */
-#bidbox{display:none;position:absolute;bottom:194px;left:50%;transform:translateX(-50%);background:rgba(15,18,26,.96);border:1px solid #444;border-radius:12px;padding:10px;z-index:30;width:min(320px,90vw);box-shadow:0 4px 24px rgba(0,0,0,.7)}
+#bidbox{display:none;position:absolute;bottom:194px;left:50%;transform:translateX(-50%);background:rgba(15,18,26,.96);border:1px solid #444;border-radius:12px;padding:10px;z-index:30;width:min(360px,92vw);box-shadow:0 4px 24px rgba(0,0,0,.7)}
+#alert-row{display:none;margin-top:6px;gap:4px;align-items:center}
+#alert-row.show{display:flex}
+#alert-input{flex:1;padding:6px 10px;border:1px solid #555;border-radius:6px;background:#111;color:var(--text);font-size:.82em;outline:none}
+#alert-input:focus{border-color:var(--accent)}
+#alert-btn{padding:8px 12px;background:#7a3a00;color:#ffb347;border:none;border-radius:6px;font-size:.82em;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0}
+#alert-btn.active{background:#c05000;color:#fff}
+/* Toast notification bottom-right */
+#alert-toast{
+  display:none;position:fixed;bottom:80px;right:16px;z-index:200;
+  background:rgba(20,14,0,.95);border:1px solid #c05000;border-radius:10px;
+  padding:12px 18px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.6);
+}
+#alert-toast.show{display:block;animation:toastIn .3s ease}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+#alert-toast .at-label{color:#ffb347;font-size:.75em;font-weight:700;margin-bottom:4px}
+#alert-toast .at-bid{color:var(--accent);font-size:1em;font-weight:800}
+#alert-toast .at-msg{color:var(--text);font-size:.85em;margin-top:4px}
+/* Alert popup when clicking bid in auction table */
+#alert-popup{
+  display:none;position:fixed;bottom:80px;right:16px;z-index:201;
+  background:rgba(20,14,0,.97);border:1px solid #c05000;border-radius:10px;
+  padding:14px 18px;max-width:300px;
+}
+#alert-popup.show{display:block}
+#alert-popup .ap-title{color:#ffb347;font-size:.78em;font-weight:700;margin-bottom:6px}
+#alert-popup .ap-bid{color:var(--accent);font-size:1.1em;font-weight:800}
+#alert-popup .ap-msg{color:var(--text);font-size:.88em;margin-top:6px;line-height:1.5}
+#alert-popup button{margin-top:10px;padding:5px 16px;background:var(--bg3);color:var(--text2);border:none;border-radius:5px;cursor:pointer;font-size:.8em}
 #bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
 .bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s}
 .bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
@@ -198,7 +226,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间（默认旁观）</button>
+  <button onclick="joinGame()">进入房间</button>
 </div>
 
 <!-- GAME -->
@@ -226,10 +254,16 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
       <button class="bb pass" onclick="selectBid('Pass')">Pass</button>
       <button class="bb dbl" id="db" onclick="selectBid('X')" disabled>X</button>
       <button class="bb rdbl" id="rb" onclick="selectBid('XX')" disabled>XX</button>
+      <button id="alert-btn" onclick="toggleAlertInput()">❗Alert</button>
       <button id="confirm-btn" onclick="confirmBid()" disabled>确认</button>
+    </div>
+    <div id="alert-row">
+      <input id="alert-input" placeholder="Alert说明（发给对手）" maxlength="60">
     </div>
   </div>
   <div id="game-info" style="display:none"></div>
+  <div id="alert-toast"><div class="at-label">❗ Alert</div><div class="at-bid" id="at-bid"></div><div class="at-msg" id="at-msg"></div></div>
+  <div id="alert-popup"><div class="ap-title">❗ Alert 说明</div><div class="ap-bid" id="ap-bid"></div><div class="ap-msg" id="ap-msg"></div><button onclick="closeAlertPopup()">关闭</button></div>
   <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
   <div id="hp"><h2>历史记录<button class="x" onclick="toggleHistory()">×</button></h2><div id="hl"></div></div>
 </div>
@@ -402,13 +436,31 @@ function onM(_,p){
       const h=S.history;
       S=d.state;
       if(h.length>S.history.length)S.history=h;
-      // Sync local trickProcessing: if currentTrick has 4 cards, we're in the delay window
+      if(S.dummyRevealed===undefined)S.dummyRevealed=false;
       trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
+      // Show toast for newly arrived alerted bids from opponents
+      if(S.phase==='bidding'){
+        const lastEntry=S.auction[S.auction.length-1];
+        if(lastEntry&&lastEntry.alert&&lastEntry.seat!==mySeat){
+          const bidStr=fB(lastEntry.bid);
+          showAlertToast(SN[lastEntry.seat]+'叫了 '+bidStr,lastEntry.alert);
+        }
+      }
       rA();
     }
   }
-  else if(d.type==='bid'){if(isHost&&S.phase==='bidding'&&d.seat===S.turnSeat)pB(d.seat,d.bid);}
-  else if(d.type==='play_card'){if(isHost&&S.phase==='playing'&&d.seat===S.turnSeat&&!trickProcessing)pC(d.seat,d.card);}
+  else if(d.type==='bid'){if(isHost&&S.phase==='bidding'&&d.seat===S.turnSeat)pB(d.seat,d.bid,d.alert);}
+  else if(d.type==='play_card'){
+    if(isHost&&S.phase==='playing'&&!trickProcessing){
+      // Allow if it's the seat's own turn, OR if declarer is playing for dummy
+      const isDeclPlay=S.contract&&d._from&&
+        S.players[S.contract.declarer]&&
+        S.players[S.contract.declarer].peerId===d._from&&
+        d.seat===S.dummy&&
+        S.turnSeat===S.dummy;
+      if(d.seat===S.turnSeat||isDeclPlay)pC(d.seat,d.card);
+    }
+  }
   else if(d.type==='request_deal'){if(isHost)sNB();}
   else if(d.type==='take_seat'){
     if(isHost){
@@ -429,6 +481,10 @@ function onM(_,p){
       }
       bS();
     }
+  }
+  else if(d.type==='alert_explain'){
+    // Opponent clicked a bid to see its alert explanation
+    showAlertPopup(d.bidStr,d.msg||'（无说明）');
   }
   else if(d.type==='ping'){
     peers[d._from]=peers[d._from]||{seat:d.seat,name:d.name};
@@ -478,8 +534,8 @@ function iV(seat,bid){
   return lc?bv(bid)>bv(lc.bid):true;
 }
 
-function pB(seat,bid){
-  S.auction.push({seat,bid});
+function pB(seat,bid,alertMsg){
+  S.auction.push({seat,bid,alert:alertMsg||undefined});
   const a=S.auction;
   if(a.length>=4){
     if(a.slice(-3).every(x=>x.bid==='Pass')&&a.length>3&&a.some(x=>x.bid!=='Pass'&&x.bid!=='X'&&x.bid!=='XX')){fA();return;}
@@ -816,6 +872,16 @@ function rTr(){
   }
 }
 
+function attachAlertClicks(container){
+  container.querySelectorAll('.auc-alert-td').forEach(td=>{
+    td.onclick=function(){
+      const idx=parseInt(this.dataset.idx);
+      const entry=S.auction[idx];
+      if(entry&&entry.alert) showAlertPopup(fB(entry.bid),entry.alert);
+    };
+  });
+}
+
 function rAu(){
   const panel=document.getElementById('auc-panel');
   const overlay=document.getElementById('auc-overlay');
@@ -829,21 +895,32 @@ function rAu(){
   for(let i=0;i<4;i++)h+='<th>'+SN[SE[(S.dealer+i)%4]]+'</th>';
   h+='</tr><tr>';
   for(let i=0;i<S.auction.length;i++){
-    h+='<td>'+fB(S.auction[i].bid)+'</td>';
+    const entry=S.auction[i];
+    const hasAlert=!!entry.alert;
+    const isOpp=mySeat&&(SE.indexOf(entry.seat)%2)!==(SE.indexOf(mySeat)%2);
+    const canClick=hasAlert&&isOpp;
+    const alertMark=hasAlert?'<span style="color:#ffb347;font-size:.8em"> ❗</span>':'';
+    const myMark=hasAlert&&!isOpp?'<span style="color:#888;font-size:.7em"> (我)</span>':'';
+    const bidHtml=fB(entry.bid)+alertMark+myMark;
+    if(canClick){
+      h+='<td class="auc-alert-td" data-idx="'+i+'" style="cursor:pointer">'+bidHtml+'</td>';
+    } else {
+      h+='<td>'+bidHtml+'</td>';
+    }
     if((i+1)%4===0)h+='</tr><tr>';
   }
   h+='</tr></table>';
 
   if(isBidding){
-    // Show large centered overlay, hide right panel
     overlay.innerHTML=h;
     overlay.classList.add('show');
     panel.classList.add('hidden');
+    attachAlertClicks(overlay);
   } else {
-    // Playing: show right panel, hide overlay
     panel.innerHTML=h;
     panel.classList.remove('hidden');
     overlay.classList.remove('show');
+    attachAlertClicks(panel);
   }
 }
 
@@ -909,7 +986,6 @@ function selectBid(bid){
   if(!mySeat||S.turnSeat!==mySeat)return;
   if(!iV(mySeat,bid))return;
   selectedBid=bid;
-  // Highlight all bid buttons including Pass/X/XX
   document.querySelectorAll('.bb').forEach(b=>{
     const bval=b.dataset.bid||b.textContent.trim();
     b.classList.toggle('selected',bval===bid);
@@ -917,16 +993,49 @@ function selectBid(bid){
   document.getElementById('confirm-btn').disabled=false;
 }
 
+window.toggleAlertInput=function(){
+  const row=document.getElementById('alert-row');
+  const btn=document.getElementById('alert-btn');
+  const show=!row.classList.contains('show');
+  row.classList.toggle('show',show);
+  btn.classList.toggle('active',show);
+  if(show)document.getElementById('alert-input').focus();
+};
+
 function confirmBid(bid){
   bid=bid||selectedBid;
   if(!bid||!mySeat||S.turnSeat!==mySeat||!iV(mySeat,bid))return;
+  const alertMsg=document.getElementById('alert-input').value.trim();
+  // Reset UI
   selectedBid=null;
   document.querySelectorAll('.bb').forEach(b=>b.classList.remove('selected'));
   document.getElementById('confirm-btn').disabled=true;
-  if(isHost)pB(mySeat,bid);else ms({type:'bid',seat:mySeat,bid});
+  document.getElementById('alert-row').classList.remove('show');
+  document.getElementById('alert-btn').classList.remove('active');
+  document.getElementById('alert-input').value='';
+  // Submit bid with optional alert
+  if(isHost)pB(mySeat,bid,alertMsg);
+  else ms({type:'bid',seat:mySeat,bid,alert:alertMsg||undefined});
 }
 
 window.makeBid=function(bid){confirmBid(bid);};
+
+let alertToastTimer=null;
+function showAlertToast(bidStr,msg){
+  const t=document.getElementById('alert-toast');
+  document.getElementById('at-bid').innerHTML=bidStr;
+  document.getElementById('at-msg').textContent=msg;
+  t.classList.add('show');
+  if(alertToastTimer)clearTimeout(alertToastTimer);
+  alertToastTimer=setTimeout(()=>t.classList.remove('show'),6000);
+}
+
+window.closeAlertPopup=function(){document.getElementById('alert-popup').classList.remove('show');};
+function showAlertPopup(bidStr,msg){
+  document.getElementById('ap-bid').innerHTML=bidStr;
+  document.getElementById('ap-msg').textContent=msg;
+  document.getElementById('alert-popup').classList.add('show');
+};
 
 // ─── Score popup ──────────────────────────────────────────────────────────────
 function sS(t,det,sc2){
