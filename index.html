@@ -223,10 +223,38 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .sbtn-cancel{padding:8px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:.85em}
 
 @media(max-width:600px){
-  .mc{width:70px;height:102px;font-size:1.2em}
-  .myc{width:80px;height:116px;font-size:1.3em}
-  .tc{width:42px;height:62px;font-size:.66em}
-  #bidbox{width:180px}.bb{font-size:.66em;padding:6px 1px}
+@media(max-width:768px){
+  .mc{width:52px;height:76px;font-size:.82em;margin-right:-12px}
+  .pz.left .mc,.pz.right .mc{width:44px;height:64px;font-size:.7em;margin-right:-28px}
+  .myc{width:52px;height:76px;font-size:.82em;margin-right:-12px}
+  .tc{width:46px;height:68px;font-size:.75em}
+  .tz{width:140px;height:120px}
+  .plbl{font-size:.72em;padding:2px 7px}
+  #auc-panel{font-size:.7em;min-width:130px;padding:6px 8px}
+  #auc-panel th,#auc-overlay th,#auc-panel td,#auc-overlay td{padding:2px 5px}
+  #status-badge{font-size:.7em;padding:4px 8px}
+  .tbtn{font-size:.65em;padding:3px 7px}
+  #bidbox{width:min(300px,95vw);bottom:90px}
+  .bb{font-size:.68em;padding:5px 1px}
+  #myhand-bar{min-height:90px;padding:6px}
+  .pz.bottom{bottom:96px}
+  #game-info{font-size:.8em;padding:6px 10px}
+  #chat-btn{font-size:.75em;padding:6px 10px}
+  #chat-panel{width:240px}
+}
+@media(max-width:480px){
+  .mc{width:36px;height:52px;font-size:.58em;margin-right:-8px}
+  .pz.left .mc,.pz.right .mc{width:32px;height:46px;font-size:.52em;margin-right:-18px}
+  .myc{width:40px;height:58px;font-size:.62em;margin-right:-8px}
+  .tc{width:36px;height:52px;font-size:.6em}
+  .tz{width:110px;height:95px}
+  .plbl{font-size:.62em;padding:1px 5px}
+  #bidbox{width:98vw;padding:6px;bottom:68px}
+  .bb{font-size:.6em;padding:4px 1px}
+  #myhand-bar{min-height:66px;padding:3px}
+  .pz.bottom{bottom:72px}
+  #status-badge{font-size:.6em;padding:3px 6px}
+  .tbtn{font-size:.58em;padding:2px 5px}
 }
 </style>
 </head>
@@ -238,7 +266,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间（默认旁观）</button>
+  <button onclick="joinGame()">进入房间</button>
 </div>
 
 <!-- GAME -->
@@ -293,7 +321,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div class="bx">
     <h3>选择座位</h3>
     <div class="sg" id="seat-btns"></div>
-    <button class="sbtn-cancel" onclick="closeSeatPick()">取消（继续旁观）</button>
+    <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
   </div>
 </div>
 
@@ -947,8 +975,8 @@ function rAu(){
     const myMark=hasAlert&&isMine?'<span style="color:#888;font-size:.7em">(我)</span>':'';
     const bidHtml=fB(entry.bid)+alertMark+myMark;
     if(hasAlert&&isOpp){
-      alertMap[i]={bidHtml:fB(entry.bid),msg:entry.alert};
-      h+='<td data-alert-idx="'+i+'" onclick="showAuctionAlert('+i+')" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
+      const safeMsg=(entry.alert||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      h+='<td data-alert-msg="'+safeMsg+'" data-alert-bid="'+entry.bid+'" onclick="handleAlertTd(this)" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
@@ -1014,20 +1042,11 @@ function uBB(){
 
 let selectedBid=null;
 const alertMap={};  // idx -> {bidHtml, msg}
-window.showAuctionAlert=function(idx){
-  const e=alertMap[idx];
-  if(e)showAlertPopup(e.bidHtml,e.msg);
+window.handleAlertTd=function(td){
+  const msg=td.getAttribute('data-alert-msg');
+  const bid=td.getAttribute('data-alert-bid');
+  showAlertPopup(fB(bid),msg||'（无说明）');
 };
-// Global delegation for alert clicks — useCapture intercepts before z-index blocks
-document.addEventListener('click',function(e){
-  const td=e.target.closest('[data-alert-idx]');
-  if(td){
-    e.stopPropagation();
-    const idx=parseInt(td.getAttribute('data-alert-idx'));
-    const entry=S&&S.auction&&S.auction[idx];
-    if(entry&&entry.alert)showAlertPopup(fB(entry.bid),entry.alert);
-  }
-},true);
 
 function bBG(){
   const g=document.getElementById('bidgrid');
