@@ -57,7 +57,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .pz.left .mc,.pz.right .mc{width:88px;height:128px;font-size:1.44em}
 .mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
 .mc.b::after{content:'';display:block;width:55%;height:65%;border:1px solid rgba(255,255,255,.15);border-radius:3px}
-.mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5)}
+.mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5);position:relative;z-index:10}
 /* Left/right: vertical column, cards upright and readable */
 .pz.left .cds{flex-direction:row;gap:0}
 .pz.right .cds{flex-direction:row;gap:0}
@@ -226,7 +226,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间</button>
+  <button onclick="joinGame()">进入房间（默认旁观）</button>
 </div>
 
 <!-- GAME -->
@@ -767,7 +767,7 @@ function rTable(){
                  (isDummy&&S.dummyRevealed);
 
     // Can declarer click dummy's cards?
-    const isDummyPlayable=amDeclarer&&isDummy&&S.dummyRevealed&&S.turnSeat===seat&&S.phase==='playing'&&!trickProcessing;
+    const isDummyPlayable=!!(S.contract&&amDeclarer&&isDummy&&S.dummyRevealed&&S.turnSeat===seat&&S.phase==='playing'&&!trickProcessing);
 
     // Sort dummy hand for display (already sorted on deal, maintain)
     // Render by suit groups for dummy (face-up), stacked for opponents (face-down)
@@ -874,7 +874,9 @@ function rTr(){
 
 function attachAlertClicks(container){
   container.querySelectorAll('.auc-alert-td').forEach(td=>{
-    td.onclick=function(){
+    td.style.pointerEvents='all';
+    td.onclick=function(e){
+      e.stopPropagation();
       const idx=parseInt(this.dataset.idx);
       const entry=S.auction[idx];
       if(entry&&entry.alert) showAlertPopup(fB(entry.bid),entry.alert);
@@ -897,13 +899,14 @@ function rAu(){
   for(let i=0;i<S.auction.length;i++){
     const entry=S.auction[i];
     const hasAlert=!!entry.alert;
-    const isOpp=mySeat&&(SE.indexOf(entry.seat)%2)!==(SE.indexOf(mySeat)%2);
-    const canClick=hasAlert&&isOpp;
-    const alertMark=hasAlert?'<span style="color:#ffb347;font-size:.8em"> ❗</span>':'';
-    const myMark=hasAlert&&!isOpp?'<span style="color:#888;font-size:.7em"> (我)</span>':'';
+    const isMine=entry.seat===mySeat;
+    const isPartner=mySeat&&!isMine&&(SE.indexOf(entry.seat)%2)===(SE.indexOf(mySeat)%2);
+    const isOpp=!isMine&&!isPartner;
+    const alertMark=hasAlert&&(isOpp||isMine)?'<span style="color:#ffb347;font-size:.8em">❗</span>':'';
+    const myMark=hasAlert&&isMine?'<span style="color:#888;font-size:.7em">(我)</span>':'';
     const bidHtml=fB(entry.bid)+alertMark+myMark;
-    if(canClick){
-      h+='<td class="auc-alert-td" data-idx="'+i+'" style="cursor:pointer">'+bidHtml+'</td>';
+    if(hasAlert&&isOpp){
+      h+='<td class="auc-alert-td" data-idx="'+i+'" style="cursor:pointer;text-decoration:underline dotted #ffb347">'+bidHtml+'</td>';
     } else {
       h+='<td>'+bidHtml+'</td>';
     }
