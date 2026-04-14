@@ -145,7 +145,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   background:none;
   overflow-x:auto;z-index:5;
 }
-.suit-grp{display:flex;gap:var(--card-gap);margin:0 4px}
+.suit-grp{display:flex;gap:var(--card-gap);margin:0}
 .myc{width:var(--cw);height:var(--ch);background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--cf);font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0}
 .myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5);position:relative;z-index:10}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
@@ -258,7 +258,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间（默认旁观）</button>
+  <button onclick="joinGame()">进入房间</button>
 </div>
 
 <!-- GAME -->
@@ -314,7 +314,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div class="bx">
     <h3>选择座位</h3>
     <div class="sg" id="seat-btns"></div>
-    <button class="sbtn-cancel" onclick="closeSeatPick()">取消（继续旁观）</button>
+    <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
   </div>
 </div>
 
@@ -422,7 +422,8 @@ window.joinGame=function(){
     const url=brokers[brokerIdx%brokers.length];
     log(wasConnected?'重连中...':'连接中...');
     if(mq){try{mq.end(true);}catch(e){}}
-    mq=mqtt.connect(url,{clientId:'mb_'+myId+'_'+Date.now(),clean:true,keepalive:15,connectTimeout:8000,reconnectPeriod:0});
+    // Stable clientId so broker recognizes us on reconnect and kicks the stale session
+    mq=mqtt.connect(url,{clientId:'mb_'+myId,clean:true,keepalive:60,connectTimeout:8000,reconnectPeriod:0});
 
     mq.on('connect',()=>{
       if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
@@ -448,18 +449,19 @@ window.joinGame=function(){
     mq.on('close',()=>{
       if(wasConnected){
         log('连接断开，重连中...');
-        reconnectTimer=setTimeout(tryConnect,2000);
-        setTimeout(()=>{if(mq&&!mq.connected){brokerIdx++;tryConnect();}},10000);
+        // Retry same broker quickly, switch after longer timeout
+        if(!reconnectTimer)reconnectTimer=setTimeout(tryConnect,3000);
+        setTimeout(()=>{if(mq&&!mq.connected){brokerIdx++;if(!reconnectTimer)reconnectTimer=setTimeout(tryConnect,1000);}},15000);
       } else {
         brokerIdx++;
-        if(brokerIdx<6){log('切换服务器...');setTimeout(tryConnect,1500);}
+        if(brokerIdx<6){log('切换服务器...');setTimeout(tryConnect,2000);}
         else log('连接失败，请刷新');
       }
     });
   }
   tryConnect();
 
-  // ── Heartbeat: 5s interval handles everything ──
+  // ── Heartbeat: 8s interval handles everything ──
   setInterval(()=>{
     if(!mq||!mq.connected){
       if(wasConnected&&!reconnectTimer){log('连接异常');tryConnect();}
@@ -472,11 +474,11 @@ window.joinGame=function(){
     // 2. Host: broadcast authoritative state (clients skip if version unchanged)
     if(isHost)bS();
 
-    // 3. Peer liveness: remove silent peers (>25s)
+    // 3. Peer liveness: remove silent peers (>60s — tolerant of network hiccups)
     const now=Date.now();let changed=false;
     for(const pid of Object.keys(peers)){
       if(pid===myId)continue;
-      if(now-peers[pid].lastSeen>25000){delete peers[pid];changed=true;}
+      if(now-peers[pid].lastSeen>60000){delete peers[pid];changed=true;}
     }
     if(changed){
       const wasH=isHost;
@@ -484,7 +486,7 @@ window.joinGame=function(){
       if(isHost&&!wasH){log('房主切换');bS();}
       rA();
     }
-  },5000);
+  },8000);
 
   const sv=localStorage.getItem('minibridge-history');
   if(sv)try{S.history=JSON.parse(sv);}catch(e){}
