@@ -258,7 +258,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <p>中国科大桥牌协会 2026 实验规则</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
-  <button onclick="joinGame()">进入房间</button>
+  <button onclick="joinGame()">进入房间（默认旁观）</button>
 </div>
 
 <!-- GAME -->
@@ -314,7 +314,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div class="bx">
     <h3>选择座位</h3>
     <div class="sg" id="seat-btns"></div>
-    <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
+    <button class="sbtn-cancel" onclick="closeSeatPick()">取消（继续旁观）</button>
   </div>
 </div>
 
@@ -344,10 +344,12 @@ function layoutFor(me){
 
 // ─── State ───────────────────────────────────────────────────────────────────
 let myId=Math.random().toString(36).slice(2,10);
-let mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null,peers={};
-let hasState=false;
-let lastStateTime=0; // timestamp of last full_state received
-let trickProcessing=false; // FIX: anti-double-process lock
+let mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null;
+let trickProcessing=false;
+
+// peers: { peerId: { name, lastSeen } }  — NO seat info here, seats live only in S.players
+let peers={};
+
 let S={
   phase:'waiting',dealer:0,
   hands:{N:[],E:[],S:[],W:[]},
@@ -356,8 +358,8 @@ let S={
   currentTrick:[],trickWins:{NS:0,EW:0},
   trickLead:null,turnSeat:null,dummy:null,
   boardNum:0,history:[],allHands:null,
-  dummyRevealed:false, // FIX: only reveal dummy after opening lead
-  _v:0 // state version counter
+  dummyRevealed:false,
+  _v:0 // version counter: incremented on every mutation
 };
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -365,18 +367,31 @@ function log(m){console.log('[mb]',m);if(S.phase==='waiting'){const b=document.g
 function sc(s){return s==='H'?'sh':s==='D'?'sd':s==='S'?'ss':'sc';}
 function scd(s){return s==='H'?'#c0392b':s==='D'?'#c0392b':s==='S'?'#bbb':'#2ecc71';}
 
-// Sort hand: suit order C<D<H<S, within suit rank HIGH→LOW (A K Q J …)
 function sortHand(hand){
   hand.sort((a,b)=>{
-    const ds=SU.indexOf(b.suit)-SU.indexOf(a.suit); // S first (reversed SU order)
+    const ds=SU.indexOf(b.suit)-SU.indexOf(a.suit);
     if(ds!==0)return ds;
-    return RANKS.indexOf(b.rank)-RANKS.indexOf(a.rank); // high rank first
+    return RANKS.indexOf(b.rank)-RANKS.indexOf(a.rank);
   });
 }
 
 // ─── MQTT ────────────────────────────────────────────────────────────────────
 function ms(msg){if(mq&&mq.connected){msg._from=myId;mq.publish(rt,JSON.stringify(msg));}}
-function bS(){if(isHost&&hasState){S._v=(S._v||0)+1;ms({type:'full_state',state:S});}}
+
+// Host broadcasts state. Bumps version so clients can skip duplicates.
+function bS(){if(isHost){S._v=(S._v||0)+1;ms({type:'full_state',state:S});}}
+
+// ─── Derive mySeat from S.players (single source of truth) ──────────────────
+// Call this after every S update. mySeat is NEVER set directly except here.
+function syncMySeat(){
+  let found=null;
+  for(const s of SE){
+    if(S.players[s]&&S.players[s].peerId===myId){found=s;break;}
+  }
+  mySeat=found;
+  // Persist for refresh recovery
+  try{const o=JSON.parse(sessionStorage.getItem('mb-session')||'{}');o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
+}
 
 // ─── Join ────────────────────────────────────────────────────────────────────
 window.joinGame=function(){
@@ -385,62 +400,46 @@ window.joinGame=function(){
   if(!rid){alert('请输入房间号');return;}
 
   // Restore session if same room
-  let savedOrigId=null;
   const saved=sessionStorage.getItem('mb-session');
-  if(saved){try{const o=JSON.parse(saved);if(o.rid===rid){savedOrigId=o.myId;myId=o.myId;mySeat=o.mySeat;myName=o.myName;}}catch(e){}}
+  if(saved){try{const o=JSON.parse(saved);if(o.rid===rid){myId=o.myId;myName=o.myName;}}catch(e){}}
 
   document.getElementById('lobby').style.display='none';
   document.getElementById('game').style.display='flex';
   rt='minibridge/room/'+rid;
-
-  // Save session for refresh recovery
-  sessionStorage.setItem('mb-session',JSON.stringify({rid,myId,mySeat,myName}));
+  sessionStorage.setItem('mb-session',JSON.stringify({rid,myId,mySeat:null,myName}));
 
   log('正在连接...');
 
-  // Try multiple brokers for reliability
   const brokers=[
     'wss://broker.emqx.io:8084/mqtt',
     'wss://broker.hivemq.com:8884/mqtt',
   ];
   let brokerIdx=0;
-  let wasConnected=false; // true once we've successfully connected at least once
+  let wasConnected=false;
   let reconnectTimer=null;
 
   function tryConnect(){
     const url=brokers[brokerIdx%brokers.length];
-    log(wasConnected?'重连中...':'连接中 '+(brokerIdx+1)+'/'+brokers.length+'...');
+    log(wasConnected?'重连中...':'连接中...');
     if(mq){try{mq.end(true);}catch(e){}}
-    mq=mqtt.connect(url,{clientId:'mb_'+myId,clean:true,keepalive:20,connectTimeout:8000,reconnectPeriod:0});
+    mq=mqtt.connect(url,{clientId:'mb_'+myId+'_'+Date.now(),clean:true,keepalive:15,connectTimeout:8000,reconnectPeriod:0});
+
     mq.on('connect',()=>{
       if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
       mq.subscribe(rt,e=>{
         if(e){log('订阅失败');return;}
-        const isReconnect=wasConnected;
         wasConnected=true;
-        log(isReconnect?'已重连':'已加入房间 '+rid);
-        peers[myId]={seat:mySeat,name:myName};
-
-        if(isReconnect){
-          // Reconnecting: reclaim seat and request state
-          if(mySeat){
-            ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:myId});
-          }
-          ms({type:'hello',seat:mySeat,name:myName});
-        } else {
-          // First connect
-          if(mySeat&&savedOrigId&&savedOrigId!==myId){
-            ms({type:'reconnect_claim',seat:mySeat,name:myName,origId:savedOrigId});
-          } else {
-            ms({type:'hello',seat:mySeat,name:myName});
-          }
-        }
-        // After a short delay, elect host and render
+        log('已连接');
+        // Announce presence — this is all we do. Host will respond with full_state.
+        ms({type:'hello',name:myName});
+        // After brief delay, if no one else responded, I'm the first → become host
         setTimeout(()=>{
-          eH();
-          if(isHost)hasState=true;
-          rA();
-        },500);
+          if(!hostId){
+            hostId=myId;isHost=true;
+            log('我是房主');
+            rA();
+          }
+        },800);
         bBG();
       });
     });
@@ -448,237 +447,156 @@ window.joinGame=function(){
     mq.on('error',()=>{});
     mq.on('close',()=>{
       if(wasConnected){
-        // Was connected before — this is a mid-session disconnect
-        log('连接断开，正在重连...');
-        // Try same broker first, then alternate
-        reconnectTimer=setTimeout(()=>{
-          tryConnect();
-        },2000);
-        // If same broker fails after a few tries, switch
-        setTimeout(()=>{
-          if(mq&&!mq.connected){
-            brokerIdx++;
-            tryConnect();
-          }
-        },8000);
+        log('连接断开，重连中...');
+        reconnectTimer=setTimeout(tryConnect,2000);
+        setTimeout(()=>{if(mq&&!mq.connected){brokerIdx++;tryConnect();}},10000);
       } else {
-        // Initial connection attempts
         brokerIdx++;
-        if(brokerIdx<6){log('切换服务器重试...');setTimeout(tryConnect,1500);}
-        else log('连接失败，请刷新重试');
+        if(brokerIdx<6){log('切换服务器...');setTimeout(tryConnect,1500);}
+        else log('连接失败，请刷新');
       }
     });
   }
   tryConnect();
 
-  // Periodic ping: keeps connection alive AND lets host know we're still here
-  // If we detect we've been disconnected, the ping interval will catch it
+  // ── Heartbeat: 5s interval handles everything ──
   setInterval(()=>{
-    if(mq&&mq.connected){
-      ms({type:'ping',seat:mySeat,name:myName});
-    } else if(wasConnected&&!reconnectTimer){
-      // Connection dropped without close event — force reconnect
-      log('连接异常，尝试重连...');
-      tryConnect();
+    if(!mq||!mq.connected){
+      if(wasConnected&&!reconnectTimer){log('连接异常');tryConnect();}
+      rA(); // update disconnect indicator
+      return;
+    }
+    // 1. Ping: tell everyone I'm alive
+    ms({type:'ping',name:myName});
+
+    // 2. Host: broadcast authoritative state (clients skip if version unchanged)
+    if(isHost)bS();
+
+    // 3. Peer liveness: remove silent peers (>25s)
+    const now=Date.now();let changed=false;
+    for(const pid of Object.keys(peers)){
+      if(pid===myId)continue;
+      if(now-peers[pid].lastSeen>25000){delete peers[pid];changed=true;}
+    }
+    if(changed){
+      const wasH=isHost;
+      eH();
+      if(isHost&&!wasH){log('房主切换');bS();}
+      rA();
     }
   },5000);
 
-  // Host heartbeat: broadcast full state every 3s so all clients stay synced
-  // Uses version counter — clients skip re-render if version unchanged
-  setInterval(()=>{
-    if(isHost&&hasState&&mq&&mq.connected){
-      bS();
-    }
-  },3000);
-
-  // Client sync request: if no state received in 8s during active game, ask for it
-  setInterval(()=>{
-    if(!isHost&&hasState&&mq&&mq.connected&&S.phase!=='waiting'){
-      if(Date.now()-lastStateTime>8000){
-        ms({type:'request_state'});
-      }
-    }
-    // Also refresh connection status display
-    rA();
-  },4000);
   const sv=localStorage.getItem('minibridge-history');
   if(sv)try{S.history=JSON.parse(sv);}catch(e){}
 };
 
-// ─── Host election ────────────────────────────────────────────────────────────
-function eH(){const a=[myId,...Object.keys(peers)];a.sort();hostId=a[0];isHost=hostId===myId;}
+// ─── Host election: lowest peerId wins ───────────────────────────────────────
+function eH(){
+  const a=[myId,...Object.keys(peers)];a.sort();
+  hostId=a[0];isHost=(hostId===myId);
+}
 
-// ─── Message handler ──────────────────────────────────────────────────────────
+// ─── Message handler ─────────────────────────────────────────────────────────
 function onM(_,p){
   let d;try{d=JSON.parse(p.toString());}catch(e){return;}
   if(d._from===myId)return;
 
+  // Track peer liveness for ALL message types
+  if(d._from){
+    if(!peers[d._from])peers[d._from]={name:d.name||'?'};
+    peers[d._from].lastSeen=Date.now();
+    if(d.name)peers[d._from].name=d.name;
+  }
+
+  // ── hello: new peer arrived ──
   if(d.type==='hello'){
-    peers[d._from]={seat:d.seat,name:d.name,lastSeen:Date.now()};
-    const wasHost=isHost;
     eH();
-    // 如果我是host，立即推送完整state给新人
-    if(isHost){
-      ms({type:'full_state',state:S});
-    }
-    // 如果我刚成为host（原host离开），广播state
-    if(isHost&&!wasHost){
-      bS();
-    }
-    cR();rA();
+    // Host sends current state to everyone (new peer will pick it up)
+    if(isHost)bS();
+    rA();
   }
-  else if(d.type==='reconnect_claim'){
-    // Player reconnecting to reclaim their seat by original peerId
-    if(isHost){
-      const prev=SE.find(s=>S.players[s]&&S.players[s].peerId===d.origId);
-      if(prev){
-        S.players[prev]={peerId:d._from,name:d.name};
-        peers[d._from]={seat:prev,name:d.name};
-        rA();bS();
-      } else if(d.seat&&!S.players[d.seat]){
-        S.players[d.seat]={peerId:d._from,name:d.name};
-        rA();bS();
-      }
-    }
-  }
+
+  // ── full_state: authoritative state from host ──
   else if(d.type==='full_state'){
-    // Accept state from the host
-    if(!isHost&&(hostId===d._from||!hostId)){
-      // Skip if we already have this version (heartbeat duplicate)
-      const newV=d.state._v||0;
-      const oldV=S._v||0;
-      if(hasState&&newV<=oldV&&newV>0){lastStateTime=Date.now();return;}
+    if(isHost)return; // I am the host, I don't accept state from others
+    if(d._from!==hostId&&hostId)return; // only accept from known host
 
-      hasState=true;
-      lastStateTime=Date.now();
-      const h=S.history;
-      S=d.state;
-      if(h.length>S.history.length)S.history=h;
-      if(S.dummyRevealed===undefined)S.dummyRevealed=false;
-      trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
+    // Version check: skip if same version (heartbeat duplicate)
+    const newV=d.state._v||0;
+    const oldV=S._v||0;
+    if(newV>0&&newV<=oldV)return;
 
-      // Reconcile mySeat with host's authoritative player map:
-      let hostSaysMyeSeat=null;
-      for(const s of SE){
-        if(S.players[s]&&S.players[s].peerId===myId){
-          hostSaysMyeSeat=s;
-          break;
-        }
-      }
-      if(mySeat&&hostSaysMyeSeat!==mySeat){
-        mySeat=hostSaysMyeSeat;
-        peers[myId]={seat:mySeat,name:myName};
-        const sv2=sessionStorage.getItem('mb-session');
-        if(sv2)try{const o=JSON.parse(sv2);o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
-      }
+    // Accept state
+    const h=S.history;
+    S=d.state;
+    if(h.length>S.history.length)S.history=h;
+    if(S.dummyRevealed===undefined)S.dummyRevealed=false;
+    trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
 
-      // Show toast for newly arrived alerted bids from opponents
-      if(S.phase==='bidding'){
-        const lastEntry=S.auction[S.auction.length-1];
-        if(lastEntry&&lastEntry.alert&&lastEntry.seat!==mySeat){
-          const bidStr=fB(lastEntry.bid);
-          showAlertToast(SN[lastEntry.seat]+'叫了 '+bidStr,lastEntry.alert);
-        }
-      }
-      rA();
-    }
+    // Derive mySeat from authoritative S.players — NEVER set it any other way
+    syncMySeat();
+    rA();
   }
-  else if(d.type==='bid'){if(isHost&&S.phase==='bidding'&&d.seat===S.turnSeat)pB(d.seat,d.bid,d.alert);}
+
+  // ── Actions: only host processes these ──
+  else if(d.type==='bid'){
+    if(isHost&&S.phase==='bidding'&&d.seat===S.turnSeat)pB(d.seat,d.bid,d.alert);
+  }
   else if(d.type==='play_card'){
     if(isHost&&S.phase==='playing'&&!trickProcessing){
-      // Allow if it's the seat's own turn, OR if declarer is playing for dummy
       const isDeclPlay=S.contract&&d._from&&
         S.players[S.contract.declarer]&&
         S.players[S.contract.declarer].peerId===d._from&&
-        d.seat===S.dummy&&
-        S.turnSeat===S.dummy;
+        d.seat===S.dummy&&S.turnSeat===S.dummy;
       if(d.seat===S.turnSeat||isDeclPlay)pC(d.seat,d.card);
     }
   }
   else if(d.type==='request_deal'){if(isHost)sNB();}
+
+  // ── take_seat: client requests a seat change ──
   else if(d.type==='take_seat'){
-    if(isHost){
-      // Game in progress: reject all seat changes (except waiting phase)
-      if(S.phase!=='waiting'){bS();return;}
-      if(d.seat){
-        const occ=S.players[d.seat];
-        // Seat occupied by someone else: reject, send current state back
-        if(occ&&occ.peerId!==d._from){bS();return;}
-        // Clear this peer from any other seat first
-        for(const s of SE){
-          if(s!==d.seat&&S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
-        }
-        S.players[d.seat]={peerId:d._from,name:d.name};
-      } else {
-        // Going spectator: clear this peer from all seats
-        for(const s of SE){
-          if(S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
-        }
+    if(!isHost)return;
+    if(S.phase!=='waiting'){bS();return;} // reject during game
+    if(d.seat){
+      const occ=S.players[d.seat];
+      if(occ&&occ.peerId!==d._from){bS();return;} // seat taken
+      // Clear this peer from any other seat
+      for(const s of SE){
+        if(s!==d.seat&&S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
       }
-      // Always broadcast so everyone gets the authoritative update
-      rA();bS();
+      S.players[d.seat]={peerId:d._from,name:d.name};
+    } else {
+      // Going spectator
+      for(const s of SE){
+        if(S.players[s]&&S.players[s].peerId===d._from)S.players[s]=null;
+      }
     }
+    syncMySeat();cR();rA();bS();
   }
-  else if(d.type==='alert_explain'){
-    // Opponent clicked a bid to see its alert explanation (legacy)
-    showAlertPopup(d.bidStr,d.msg||'（无说明）');
-  }
+
+  // ── Alert system ──
   else if(d.type==='request_explain'){
-    // Someone is asking me to explain one of my bids
-    // Check: is this bid mine?
     if(d.seat===mySeat&&S.auction[d.aucIdx]){
       showExplainPrompt(d.aucIdx,d.bid,d.fromName||'对手');
     }
   }
   else if(d.type==='provide_explain'){
-    // Bidder provided an explanation — host writes it into auction
     if(isHost&&d.aucIdx!=null&&S.auction[d.aucIdx]&&d.msg){
       S.auction[d.aucIdx].alert=d.msg;
       rA();bS();
     }
   }
-  else if(d.type==='chat'){appendChat(d);}
-  else if(d.type==='ping'){
-    peers[d._from]=peers[d._from]||{seat:d.seat,name:d.name};
-    peers[d._from].lastSeen=Date.now();
-    eH();
-  }
-  else if(d.type==='request_state'){
-    // A client is asking for current state — host responds
-    if(isHost&&hasState)bS();
-  }
-}
 
-// ─── Peer liveness: detect if host has gone silent ──────────────────────────
-// Track lastSeen for all peers; if peer hasn't pinged in 20s, remove and re-elect
-setInterval(()=>{
-  const now=Date.now();
-  let changed=false;
-  for(const pid of Object.keys(peers)){
-    if(pid===myId)continue;
-    if(peers[pid].lastSeen&&now-peers[pid].lastSeen>20000){
-      delete peers[pid];
-      changed=true;
-    }
-  }
-  if(changed){
-    const wasHost=isHost;
-    eH();
-    if(isHost&&!wasHost){
-      // I just became host because old host disappeared
-      hasState=true;
-      log('房主切换');
-      bS();
-    }
-    rA();
-  }
-},6000);
+  // ── Chat & misc ──
+  else if(d.type==='chat'){appendChat(d);}
+  else if(d.type==='ping'){eH();} // peer tracking already done above
+  else if(d.type==='request_state'){if(isHost)bS();}
+}
 
 // ─── Game logic ───────────────────────────────────────────────────────────────
 function cR(){if(SE.filter(s=>S.players[s]).length===4&&S.phase==='waiting')sNB();}
 
 function sNB(){
-  hasState=true;
   trickProcessing=false;
   S.boardNum++;
   S.dealer=(S.boardNum===1)?0:(S.dealer+1)%4;
@@ -850,8 +768,8 @@ function rB(sc2,ct,dt){
 
 // ─── Seat management ─────────────────────────────────────────────────────────
 window.showSeatPick=function(){
-  // If we haven't received authoritative state yet, warn
-  if(!hasState&&!isHost){
+  // If we haven't received any state from host yet, wait
+  if(!isHost&&S._v===0){
     alert('正在同步房间状态，请稍候再试');
     return;
   }
@@ -890,33 +808,18 @@ window.showSeatPick=function(){
 window.closeSeatPick=function(){document.getElementById('seat-pick').classList.remove('show');};
 
 function takeSeat(seat){
-  // Update session storage for reconnection
-  const sv2=sessionStorage.getItem('mb-session');
-  if(sv2)try{const o=JSON.parse(sv2);o.mySeat=seat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
-
   if(isHost){
-    // Host applies directly: evict self from all seats, then take new seat
+    // Host applies directly
     for(const s of SE){if(S.players[s]&&S.players[s].peerId===myId)S.players[s]=null;}
     if(seat){
-      // Double-check: seat might have been taken between showing picker and clicking
-      if(S.players[seat]&&S.players[seat].peerId!==myId){
-        // Seat was grabbed by someone else — refuse, refresh UI
-        rA();return;
-      }
+      if(S.players[seat]&&S.players[seat].peerId!==myId){rA();return;} // taken
       S.players[seat]={peerId:myId,name:myName};
     }
-    mySeat=seat;
-    peers[myId]={seat:mySeat,name:myName};
-    bS(); // broadcast authoritative state to everyone
-    rA();
+    syncMySeat();
+    cR();rA();bS();
   } else {
-    // Non-host: set mySeat optimistically for local layout rotation,
-    // but do NOT touch S.players — host is the single source of truth.
-    // Host will broadcast full_state which updates S.players for everyone.
-    mySeat=seat;
-    peers[myId]={seat:mySeat,name:myName};
-    ms({type:'take_seat',seat:mySeat,name:myName});
-    rA(); // re-render with new perspective (layout rotation) but S.players unchanged
+    // Non-host: send request. Do NOT touch mySeat — wait for full_state from host.
+    ms({type:'take_seat',seat:seat,name:myName});
   }
 }
 
@@ -943,6 +846,7 @@ function uTB(){
   else b.textContent='第'+S.boardNum+'局 · 结束'+(!mySeat?' · 旁观中':'')+dcTag;
   if(sb)sb.style.display=(S.phase==='waiting'&&isHost&&sc2>=2)?'inline-block':'none';
   // Show centered seat prompt only when spectating, game not started, AND we have state
+  const hasState=isHost||S._v>0;
   if(sp)sp.classList.toggle('show',!mySeat&&S.phase==='waiting'&&hasState);
   document.getElementById('board').classList.toggle('spectating',!mySeat);
 }
