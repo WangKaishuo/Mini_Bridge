@@ -53,11 +53,11 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .cds{display:flex;flex-wrap:nowrap;overflow:visible;gap:0}
 
 /* All opponent cards same size, horizontal */
-.mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:104px;height:152px;font-size:1.6em;margin-right:-60px;transition:margin .1s}
+.mc{background:var(--card);border-radius:6px;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:700;line-height:1.1;flex-shrink:0;box-shadow:1px 2px 6px var(--card-sh);width:104px;height:152px;font-size:1.6em;margin-right:-20px}
 .pz.left .mc,.pz.right .mc{width:88px;height:128px;font-size:1.44em}
 .mc.b{background:linear-gradient(135deg,#3a5ba0,#2c4a85)!important;color:transparent}
 .mc.b::after{content:'';display:block;width:55%;height:65%;border:1px solid rgba(255,255,255,.15);border-radius:3px}
-.mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5);position:relative;z-index:10;margin-right:-60px}
+.mc.playable{border:3px solid var(--accent);cursor:pointer;box-shadow:0 0 0 3px rgba(226,196,77,.5);position:relative;z-index:10}
 /* Left/right: vertical column, cards upright and readable */
 .pz.left .cds{flex-direction:row}
 .pz.right .cds{flex-direction:row}
@@ -137,8 +137,8 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   overflow-x:auto;z-index:5;
 }
 .suit-grp{display:flex;gap:1px;margin:0}
-.myc{width:104px;height:152px;background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.6em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0;margin-right:-60px}
-.myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5)}
+.myc{width:104px;height:152px;background:var(--card);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:1.6em;font-weight:700;line-height:1.15;box-shadow:0 3px 10px var(--card-sh);cursor:default;transition:transform .15s,box-shadow .15s;user-select:none;flex-shrink:0;margin-right:-20px}
+.myc.playable{cursor:pointer;border:3px solid var(--accent);box-shadow:0 0 0 3px rgba(226,196,77,.5),0 4px 16px rgba(0,0,0,.5);position:relative;z-index:10}
 .myc.playable:hover{transform:translateY(-14px);box-shadow:0 0 0 3px rgba(226,196,77,.7),0 12px 28px rgba(0,0,0,.6)}
 .myc .sym{font-size:1.2em}.myc .rk{font-size:1.4em;font-weight:800}
 .ss{color:#111}.sh{color:var(--red)}.sd{color:#d05000}.sc{color:#1a7a42}
@@ -992,6 +992,15 @@ window.showAuctionAlert=function(idx){
   const e=alertMap[idx];
   if(e)showAlertPopup(e.bidHtml,e.msg);
 };
+// Global delegation for alert clicks — works regardless of z-index issues
+document.addEventListener('click',function(e){
+  const td=e.target.closest('[data-alert-idx]');
+  if(td){
+    const idx=parseInt(td.dataset.alertIdx);
+    const entry=S.auction[idx];
+    if(entry&&entry.alert)showAlertPopup(fB(entry.bid),entry.alert);
+  }
+},true); // useCapture=true to intercept before anything else
 
 function bBG(){
   const g=document.getElementById('bidgrid');
