@@ -2,8 +2,13 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>小小桥牌</title>
+
+
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&display=swap');
 :root{
@@ -42,7 +47,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 /* ── Full-screen felt: #board IS the table ── */
 #board{
   position:absolute;inset:0;
-  background: url('./quehun.png') center/cover no-repeat;
+  background:radial-gradient(ellipse at 50% 48%,#28884e 0%,var(--felt) 58%,#134a2a 100%);
 }
 /* Player zones: absolute on each edge */
 .pz{position:absolute;display:flex;flex-direction:column;align-items:center;gap:3px;overflow:visible;z-index:2;box-sizing:border-box}
@@ -328,6 +333,57 @@ const SN={N:'北',E:'东',S:'南',W:'西'};
 const BS=['C','D','H','S','NT'],LV=[1,2,3,4];
 const TN={1:4,2:5,3:6,4:7};
 
+
+function connectToMqtt() {
+    const host = '5c022761be444478a2b4431489f17317.s1.eu.hivemq.cloud'; 
+    const user = 'Titus'; 
+    const pass = 'Xk9#mP2$vLq7';
+
+    // 如果已经存在连接，先关闭它防止重复连接
+   if (mq) {
+        mq.end(true);
+        mq.removeAllListeners(); 
+    }
+
+    mq = mqtt.connect(`wss://${host}:8884/mqtt`, {
+        clientId: 'mb_' + myId,
+        username: user,
+        password: pass,
+        clean: true, // 建议设为 true，确保每次连接都是干净的会话
+        reconnectPeriod: 1000, // 缩短重连间隔（1秒）
+        connectTimeout: 5000,
+        keepalive: 30 // 设置 MQTT 心跳间隔
+    });
+
+   // 监听连接丢失，给用户直观提示
+    mq.on('close', () => {
+        const b = document.getElementById('ib');
+        if (b) b.textContent = "连接已断开，正在尝试重连...";
+    });
+
+        mq.subscribe([rt, rt + '/req'], (err) => {
+            if (err) { log('订阅失败'); return; }
+            wasConnected = true;
+            log('已连接');
+            
+            // 重新连接后主动请求一次状态，同步由于掉线错过的最新数据
+            ms({ type: 'request_state' });
+            ms({ type: 'hello', name: myName });
+        });
+
+    mq.on('error', (e) => { log('连接错误: ' + e.message); });
+    mq.on('offline', () => { log('网络断开，尝试重连...'); });
+    mq.on('message', onM); 
+}
+
+
+
+
+
+
+
+
+
 // Relative seat layout: given mySeat, what compass goes in each visual slot?
 // Spectators view from South perspective.
 function viewSeat(){return mySeat||'S';}
@@ -345,9 +401,39 @@ function layoutFor(me){
 let myId=Math.random().toString(36).slice(2,10);
 let mySeat=null,myName='',mq=null,rt='',isHost=false,hostId=null;
 let trickProcessing=false;
+let reconnectTimer = null;
+let wasConnected = false;
+let myRid = '';
+let prevPhase = 'waiting';
 
 // peers: { peerId: { name, lastSeen } }  — NO seat info here, seats live only in S.players
 let peers={};
+
+
+window.joinGame = function() {
+    const n = document.getElementById('nn').value.trim();
+    const r = document.getElementById('rid').value.trim();
+    if (!n || !r) { alert('请输入昵称和房间号'); return; }
+    
+    myName = n; 
+    myRid = r;
+    rt = 'ustc_br/' + myRid; // 你的房间频道
+    
+    localStorage.setItem('mb_n', n);
+    localStorage.setItem('mb_r', r);
+    
+    document.getElementById('lobby').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    log('正在连接 HiveMQ...');
+
+	bBG();
+   connectToMqtt();
+};
+
+
+
+
+
 
 let S={
   phase:'waiting',dealer:0,
@@ -375,10 +461,27 @@ function sortHand(hand){
 }
 
 // ─── MQTT ────────────────────────────────────────────────────────────────────
-function ms(msg){if(mq&&mq.connected){msg._from=myId;mq.publish(rt,JSON.stringify(msg));}}
+function ms(msg) {
+    if (mq && mq.connected) {
+        msg._from = myId;
+        // 如果是同步请求，发到 /req 频道，避免干扰主频道的逻辑解析
+        const topic = msg.type === 'request_state' ? rt + '/req' : rt;
+        mq.publish(topic, JSON.stringify(msg));
+    }
+}
 
 // Host broadcasts state. Bumps version so clients can skip duplicates.
-function bS(){if(isHost){S._v=(S._v||0)+1;ms({type:'full_state',state:S});}}
+function bS() {
+  if (isHost) {
+    S._v = (S._v || 0) + 1;
+    
+    // 创建一个不包含历史记录的副本进行发送
+    const stateToSend = { ...S };
+    delete stateToSend.history; // 关键：不在线上传输海量历史数据
+    
+    ms({ type: 'full_state', state: stateToSend });
+  }
+}
 
 // ─── Derive mySeat from S.players (single source of truth) ──────────────────
 // Call this after every S update. mySeat is NEVER set directly except here.
@@ -392,73 +495,22 @@ function syncMySeat(){
   try{const o=JSON.parse(sessionStorage.getItem('mb-session')||'{}');o.mySeat=mySeat;sessionStorage.setItem('mb-session',JSON.stringify(o));}catch(e){}
 }
 
-// ─── Join ────────────────────────────────────────────────────────────────────
-window.joinGame=function(){
-  myName=document.getElementById('nn').value.trim()||'玩家';
-  const rid=document.getElementById('rid').value.trim();
-  if(!rid){alert('请输入房间号');return;}
+// ─── Join ────────────────────────────────────────────────────────────────────// 
 
-  // Restore session if same room
-  const saved=sessionStorage.getItem('mb-session');
-  if(saved){try{const o=JSON.parse(saved);if(o.rid===rid){myId=o.myId;myName=o.myName;}}catch(e){}}
+function tryConnect() {
+    log('尝试恢复连接...');
+    // 使用计时器避免在网络极差时瞬间产生大量连接请求
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    
+    reconnectTimer = setTimeout(() => {
+        connectToMqtt();
+    }, 3000); // 3秒后尝试重连
+}
 
-  document.getElementById('lobby').style.display='none';
-  document.getElementById('game').style.display='flex';
-  rt='minibridge/room/'+rid;
-  sessionStorage.setItem('mb-session',JSON.stringify({rid,myId,mySeat:null,myName}));
 
-  log('正在连接...');
 
-  const brokers=[
-    'wss://broker.emqx.io:8084/mqtt',
-    'wss://broker.hivemq.com:8884/mqtt',
-  ];
-  let brokerIdx=0;
-  let wasConnected=false;
-  let reconnectTimer=null;
 
-  function tryConnect(){
-    const url=brokers[brokerIdx%brokers.length];
-    log(wasConnected?'重连中...':'连接中...');
-    if(mq){try{mq.end(true);}catch(e){}}
-    // Stable clientId so broker recognizes us on reconnect and kicks the stale session
-    mq=mqtt.connect(url,{clientId:'mb_'+myId,clean:true,keepalive:60,connectTimeout:8000,reconnectPeriod:0});
 
-    mq.on('connect',()=>{
-      if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
-      mq.subscribe(rt,e=>{
-        if(e){log('订阅失败');return;}
-        wasConnected=true;
-        log('已连接');
-        // Announce presence — this is all we do. Host will respond with full_state.
-        ms({type:'hello',name:myName});
-        // After brief delay, if no one else responded, I'm the first → become host
-        setTimeout(()=>{
-          if(!hostId){
-            hostId=myId;isHost=true;
-            log('我是房主');
-            rA();
-          }
-        },800);
-        bBG();
-      });
-    });
-    mq.on('message',onM);
-    mq.on('error',()=>{});
-    mq.on('close',()=>{
-      if(wasConnected){
-        log('连接断开，重连中...');
-        // Retry same broker quickly, switch after longer timeout
-        if(!reconnectTimer)reconnectTimer=setTimeout(tryConnect,3000);
-        setTimeout(()=>{if(mq&&!mq.connected){brokerIdx++;if(!reconnectTimer)reconnectTimer=setTimeout(tryConnect,1000);}},15000);
-      } else {
-        brokerIdx++;
-        if(brokerIdx<6){log('切换服务器...');setTimeout(tryConnect,2000);}
-        else log('连接失败，请刷新');
-      }
-    });
-  }
-  tryConnect();
 
   // ── Heartbeat: 8s interval handles everything ──
   setInterval(()=>{
@@ -488,8 +540,7 @@ window.joinGame=function(){
   },8000);
 
   const sv=localStorage.getItem('minibridge-history');
-  if(sv)try{S.history=JSON.parse(sv);}catch(e){}
-};
+  if(sv)try{S.history=JSON.parse(sv);}catch(e){};
 
 // ─── Host election: lowest peerId wins ───────────────────────────────────────
 function eH(){
@@ -498,8 +549,19 @@ function eH(){
 }
 
 // ─── Message handler ─────────────────────────────────────────────────────────
-function onM(_,p){
-  let d;try{d=JSON.parse(p.toString());}catch(e){return;}
+function onM(t,p){
+  let d;
+    try { d = JSON.parse(p.toString()); } catch (e) { return; }
+    
+    // 如果收到的是状态请求，且我是房主
+    if (t.endsWith('/req') && d.type === 'request_state') {
+        if (isHost) {
+            console.log('有新玩家加入，我作为房主立即同步状态');
+            bS(); // 立即广播当前游戏状态 S
+        }
+        return; 
+    }
+
   if(d._from===myId)return;
 
   // Track peer liveness for ALL message types
@@ -518,31 +580,25 @@ function onM(_,p){
   }
 
   // ── full_state: authoritative state from host ──
-  else if(d.type==='full_state'){
-    if(isHost)return; // I am the host, I don't accept state from others
-    if(d._from!==hostId&&hostId)return; // only accept from known host
+  else if (d.type === 'full_state') {
+  if (isHost) return;
+  const newV = d.state._v || 0;
+  const oldV = S._v || 0;
+  if (newV > 0 && newV <= oldV) return;
 
-    // Version check: skip if same version (heartbeat duplicate)
-    const newV=d.state._v||0;
-    const oldV=S._v||0;
-    if(newV>0&&newV<=oldV)return;
-
-    // Accept state
-    const prevPhase=S.phase;
-    const h=S.history;
-    S=d.state;
-    if(h.length>S.history.length)S.history=h;
-    if(S.dummyRevealed===undefined)S.dummyRevealed=false;
-    trickProcessing=(S.currentTrick&&S.currentTrick.length===4);
-
-    // Derive mySeat from authoritative S.players — NEVER set it any other way
-    syncMySeat();
-    rA();
+  // 保留本地的历史记录，不被房主发来的空历史覆盖
+  const localHistory = S.history; 
+  S = d.state;
+  S.history = localHistory; 
+  
+  syncMySeat();
+  rA();
 
     // Show score popup when phase transitions to scoring
     if(S.phase==='scoring'&&prevPhase!=='scoring'){
       showScoreFromState();
     }
+	prevPhase = S.phase;
   }
 
   // ── Actions: only host processes these ──
