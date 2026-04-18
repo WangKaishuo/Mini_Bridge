@@ -224,6 +224,9 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .hi{background:var(--bg2);border-radius:7px;padding:10px;margin-bottom:8px;font-size:.78em}
 .hi .bn{color:var(--gold);font-weight:700}.hi .ct{color:var(--accent)}.hi .dt{margin-top:3px;color:var(--text2);font-size:.88em;line-height:1.5}
 
+
+
+
 /* Seat picker */
 #seat-pick{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:80;align-items:center;justify-content:center}
 
@@ -250,6 +253,95 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .sbtn:hover:not(:disabled){background:var(--felt);border-color:var(--felt)}
 .sbtn:disabled{opacity:.3;cursor:not-allowed}
 .sbtn-cancel{padding:8px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:.85em}
+
+
+
+/* 声称相关样式 */
+#claim-btn {
+  margin-left: 8px;
+  padding: 4px 10px;
+  background: var(--gold);
+  color: #111;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  cursor: pointer;
+}
+#claim-dialog {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg2);
+  border: 2px solid var(--gold);
+  border-radius: 12px;
+  padding: 20px 24px;
+  z-index: 150;
+  min-width: 280px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+}
+#claim-dialog.show { display: block; }
+#claim-dialog h3 { color: var(--gold); margin-bottom: 12px; }
+#claim-dialog p { color: var(--text2); margin-bottom: 16px; }
+#claim-dialog input {
+  width: 100%;
+  padding: 8px 10px;
+  background: #111;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 1em;
+}
+#claim-dialog .claim-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+#claim-dialog button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#claim-dialog .claim-confirm {
+  background: var(--gold);
+  color: #111;
+}
+#claim-dialog .claim-cancel {
+  background: var(--bg3);
+  color: var(--text2);
+}
+#claim-response-panel {
+  display: none;
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20,14,0,0.97);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  padding: 14px 20px;
+  z-index: 140;
+  text-align: center;
+}
+#claim-response-panel.show { display: block; }
+#claim-response-panel .cr-declarer { color: var(--gold); }
+#claim-response-panel .cr-tricks { color: var(--accent); font-size: 1.2em; font-weight: 700; margin: 6px 0; }
+#claim-response-panel .cr-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+#claim-response-panel button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cr-agree { background: var(--felt); color: #fff; }
+.cr-reject { background: #8e3b3b; color: #fff; }
+
+
 
 
 </style>
@@ -279,6 +371,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
     <button class="tbtn go" id="sbtn" style="display:none" onclick="manualStart()">开始发牌</button>
     <button class="tbtn" onclick="showSeatPick()">换座位</button>
     <button class="tbtn" onclick="toggleHistory()">📋历史</button>
+    <button id="claim-btn" style="display:none;" onclick="showClaimDialog()">📢 声称</button>
   </div>
   <div id="seat-prompt"><p>你还没有入座</p><button onclick="showSeatPick()">点击入座</button></div>
   <div id="auc-panel" class="hidden"></div>
@@ -311,7 +404,35 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
   <div id="explain-prompt"><div class="ep-title">🔍 对手请求解释你的叫品</div><div class="ep-bid" id="ep-bid"></div><input id="ep-input" placeholder="输入这个叫品的含义..." maxlength="80" onkeydown="if(event.key==='Enter')submitExplain()"><div class="ep-btns"><button class="ep-skip" onclick="submitExplain('')">跳过</button><button class="ep-send" onclick="submitExplain()">发送</button></div></div>
   <div id="spop"><div class="bx"><h2 id="st"></h2><div class="dt" id="sd"></div><div class="sv" id="sv"></div><button onclick="closeScore()">下一局</button></div></div>
   <div id="hp"><h2>历史记录<button class="x" onclick="toggleHistory()">×</button></h2><div id="hl"></div></div>
+
+
+
+<!-- 声称输入对话框 -->
+<div id="claim-dialog">
+  <h3>摊牌声称</h3>
+  <p>作为庄家，你可以声称剩余墩数。</p>
+  <label>声称赢墩数：</label>
+  <input type="number" id="claim-tricks-input" min="0" max="7" step="1" value="0">
+  <div class="claim-actions">
+    <button class="claim-cancel" onclick="closeClaimDialog()">取消</button>
+    <button class="claim-confirm" onclick="submitClaim()">提交</button>
+  </div>
 </div>
+
+<!-- 防守方响应面板 -->
+<div id="claim-response-panel">
+  <div><span class="cr-declarer" id="cr-declarer"></span> 声称赢得 <span class="cr-tricks" id="cr-tricks"></span> 墩</div>
+  <div class="cr-buttons">
+    <button class="cr-agree" onclick="respondClaim(true)">同意</button>
+    <button class="cr-reject" onclick="respondClaim(false)">拒绝</button>
+  </div>
+</div>
+
+
+
+</div>
+
+
 
 <!-- Seat picker overlay -->
 <div id="seat-pick">
@@ -321,6 +442,9 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
     <button class="sbtn-cancel" onclick="closeSeatPick()">取消</button>
   </div>
 </div>
+
+
+
 
 <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
 <script>
@@ -444,7 +568,9 @@ let S={
   trickLead:null,turnSeat:null,dummy:null,
   boardNum:0,history:[],allHands:null,
   dummyRevealed:false,
+ claim: null,
   _v:0 // version counter: incremented on every mutation
+
 };
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -650,6 +776,32 @@ function onM(t,p){
     }
   }
 
+
+ // ── Claim system ──
+  else if (d.type === 'claim') {
+    if (isHost) {
+      // 仅当没有进行中的声称且游戏在 playing 阶段
+      if (!S.claim && S.phase === 'playing' && d.claim) {
+        S.claim = d.claim;
+        rA(); bS();
+      }
+    }
+  }
+  else if (d.type === 'claim_response') {
+    if (isHost && S.claim) {
+      const seat = SE.find(s => S.players[s] && S.players[s].peerId === d._from);
+      if (seat && S.claim.responses[seat] === null) {
+        S.claim.responses[seat] = d.agree;
+        checkClaimResolution();
+        rA(); bS();
+      }
+    }
+  }
+
+
+
+
+
   // ── Chat & misc ──
   else if(d.type==='chat'){appendChat(d);}
   else if(d.type==='ping'){eH();} // peer tracking already done above
@@ -660,6 +812,7 @@ function onM(t,p){
 function cR(){if(SE.filter(s=>S.players[s]).length===4&&S.phase==='waiting')sNB();}
 
 function sNB(){
+  S.claim = null;
   trickProcessing=false;
   S.boardNum++;
   S.dealer=(S.boardNum===1)?0:(S.dealer+1)%4;
@@ -745,9 +898,11 @@ function fA(){
   S.currentTrick=[];
   S.dummyRevealed=false; // dummy hidden until opening lead played
   rA();bS();
+  S.claim = null;
 }
 
 function pC(seat,card){
+  if (S.claim) return; // 有未解决的声称，禁止出牌
   if(trickProcessing)return; // FIX: prevent double-fire
   const h=S.hands[seat];
   const idx=h.findIndex(c=>c.suit===card.suit&&c.rank===card.rank);
@@ -894,8 +1049,165 @@ window.manualStart=function(){
   }
 };
 
+
+// 检查当前玩家是否为庄家且可以声称
+function canClaim() {
+  if (S.phase !== 'playing') return false;
+  if (!mySeat) return false;
+  if (!S.contract) return false;
+  if (mySeat !== S.contract.declarer) return false;
+  if (S.claim) return false; // 已有进行中的声称
+  // 剩余墩数至少为1（不能声称0墩？可以）
+  return true;
+}
+
+// 更新声称按钮显示
+function updateClaimButton() {
+  const btn = document.getElementById('claim-btn');
+  if (!btn) return;
+  btn.style.display = canClaim() ? 'inline-block' : 'none';
+}
+
+// 显示声称对话框
+window.showClaimDialog = function() {
+  if (!canClaim()) return;
+  const dialog = document.getElementById('claim-dialog');
+  const input = document.getElementById('claim-tricks-input');
+  const currentTricks = S.trickWins[(SE.indexOf(mySeat)%2===0)?'NS':'EW'];
+  const remaining = 7 - (S.trickWins.NS + S.trickWins.EW);
+  input.min = currentTricks;
+  input.max = currentTricks + remaining;
+  input.value = currentTricks + remaining; // 默认声称全拿
+  dialog.classList.add('show');
+};
+
+window.closeClaimDialog = function() {
+  document.getElementById('claim-dialog').classList.remove('show');
+};
+
+// 提交声称（庄家）
+window.submitClaim = function() {
+  const input = document.getElementById('claim-tricks-input');
+  let tricks = parseInt(input.value, 10);
+  const currentTricks = S.trickWins[(SE.indexOf(mySeat)%2===0)?'NS':'EW'];
+  const remaining = 7 - (S.trickWins.NS + S.trickWins.EW);
+  if (isNaN(tricks) || tricks < currentTricks || tricks > currentTricks + remaining) {
+    alert('无效的墩数');
+    return;
+  }
+  closeClaimDialog();
+  
+  // 构造声称对象
+  const claim = {
+    declarer: mySeat,
+    tricks: tricks,
+    responses: {}
+  };
+  // 初始化防守方响应为 null
+  const declarerIdx = SE.indexOf(mySeat);
+  const opp1 = SE[(declarerIdx + 1) % 4];
+  const opp2 = SE[(declarerIdx + 3) % 4];
+  claim.responses[opp1] = null;
+  claim.responses[opp2] = null;
+  
+  if (isHost) {
+    S.claim = claim;
+    rA(); bS();
+  } else {
+    ms({ type: 'claim', claim: claim });
+  }
+};
+
+// 防守方响应声称
+window.respondClaim = function(agree) {
+  if (!S.claim) return;
+  if (!mySeat) return;
+  const resp = S.claim.responses;
+  if (resp[mySeat] !== undefined && resp[mySeat] === null) {
+    if (isHost) {
+      resp[mySeat] = agree;
+      checkClaimResolution();
+      rA(); bS();
+    } else {
+      ms({ type: 'claim_response', agree: agree });
+    }
+  }
+};
+
+// 主机检查声称是否已解决
+function checkClaimResolution() {
+  if (!S.claim) return;
+  const resp = S.claim.responses;
+  const values = Object.values(resp);
+  if (values.every(v => v === true)) {
+    // 所有防守方同意，直接结算
+    applyClaimResult();
+  } else if (values.some(v => v === false)) {
+    // 有防守方拒绝，取消声称，继续打牌
+    S.claim = null;
+  }
+  // 如果还有 null 则等待
+}
+
+// 应用声称结果（结束牌局）
+function applyClaimResult() {
+  if (!S.claim) return;
+  const claim = S.claim;
+  const declarer = claim.declarer;
+  const side = (SE.indexOf(declarer) % 2 === 0) ? 'NS' : 'EW';
+  // 设置最终赢墩为声称的墩数
+  S.trickWins[side] = claim.tricks;
+  // 另一方的墩数 = 7 - claim.tricks
+  const otherSide = (side === 'NS') ? 'EW' : 'NS';
+  S.trickWins[otherSide] = 7 - claim.tricks;
+  S.claim = null;
+  S.phase = 'scoring';
+  // 计算得分
+  const c = S.contract;
+  const made = S.trickWins[side] - TN[c.level];
+  const score = cSc(c, made);
+  rB(score, c, S.trickWins[side]);
+  rA(); bS();
+  sS(fC(c), '庄家声称 · ' + (made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made)) + ' · ' + S.trickWins[side] + '/7墩', score);
+}
+
+// 渲染防守方响应面板
+function renderClaimResponsePanel() {
+  const panel = document.getElementById('claim-response-panel');
+  if (!panel) return;
+  if (!S.claim || !mySeat) {
+    panel.classList.remove('show');
+    return;
+  }
+  const claim = S.claim;
+  const resp = claim.responses[mySeat];
+  // 只有防守方且尚未响应才显示
+  const declarerIdx = SE.indexOf(claim.declarer);
+  const isOpp = (mySeat !== claim.declarer) && ((SE.indexOf(mySeat) % 2) !== (declarerIdx % 2));
+  if (isOpp && resp === null) {
+    document.getElementById('cr-declarer').textContent = SN[claim.declarer];
+    document.getElementById('cr-tricks').textContent = claim.tricks + ' 墩';
+    panel.classList.add('show');
+  } else {
+    panel.classList.remove('show');
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 // ─── Rendering ───────────────────────────────────────────────────────────────
-function rA(){rTable();rMH();rTr();rAu();rCl();uBB();uTB();}
+function rA(){rTable();rMH();rTr();rAu();rCl();uBB();uTB();updateClaimButton();
+  renderClaimResponsePanel();}
 
 function uTB(){
   const b=document.getElementById('ib'),sb=document.getElementById('sbtn');
