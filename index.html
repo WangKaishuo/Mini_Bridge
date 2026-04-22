@@ -157,7 +157,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 .ss{color:#111}.sh{color:var(--red)}.sd{color:#d05000}.sc{color:#1a7a42}
 
 /* ── BID BOX right-side panel ── */
-#bidbox{display:none;position:absolute;bottom:calc(var(--hand-h) + 4px);left:50%;transform:translateX(-50%);background:rgba(15,18,26,.96);border:1px solid #444;border-radius:12px;padding:10px;z-index:30;width:min(360px,92vw);box-shadow:0 4px 24px rgba(0,0,0,.7)}
+#bidbox{display:none;position:absolute;bottom:calc(var(--hand-h) + 4px);left:50%;transform:translateX(-50%);background:rgba(15,18,26,.96);border:1px solid #444;border-radius:12px;padding:10px;z-index:30;width:min(480px,96vw);box-shadow:0 4px 24px rgba(0,0,0,.7)}
 #alert-row{display:none;margin-top:6px;gap:4px;align-items:center}
 #alert-row.show{display:flex}
 #alert-input{flex:1;padding:6px 10px;border:1px solid #555;border-radius:6px;background:#111;color:var(--text);font-size:.82em;outline:none}
@@ -186,7 +186,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 #alert-popup .ap-bid{color:var(--accent);font-size:1.1em;font-weight:800}
 #alert-popup .ap-msg{color:var(--text);font-size:.88em;margin-top:6px;line-height:1.5}
 #alert-popup button{margin-top:10px;padding:5px 16px;background:var(--bg3);color:var(--text2);border:none;border-radius:5px;cursor:pointer;font-size:.8em}
-#bidgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px}
+#bidgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:8px}
 .bb{padding:7px 1px;border:none;border-radius:4px;background:var(--bg3);color:var(--text);font-size:.74em;cursor:pointer;text-align:center;font-weight:700;transition:background .12s;transition:background .12s,color .12s}
 .bb:hover:not(:disabled){background:var(--felt)}.bb:disabled{opacity:.2;cursor:not-allowed}
 .bb.pass{background:#3d4a5c;color:#aaa;padding:8px 10px;font-size:.82em}.bb.dbl{background:#8e3b3b;color:#fff;padding:8px 14px;font-size:.9em;font-weight:800}.bb.rdbl{background:#2b5ea0;color:#fff;padding:8px 10px;font-size:.9em;font-weight:800}.bb.selected{background:var(--accent)!important;color:#111!important;transform:scale(1.08)}
@@ -351,7 +351,7 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 <!-- LOBBY -->
 <div id="lobby">
   <h1>♠ 小小桥牌 ♣</h1>
-  <p>中国科大桥牌协会 2026 实验规则</p>
+  <p>中国科大桥牌协会 2026 实验规则 · 60张牌 · 8张底牌 · 7阶叫牌</p>
   <div class="fg"><label>昵称</label><input id="nn" placeholder="输入昵称" maxlength="12" autocomplete="off"></div>
   <div class="fg"><label>房间号</label><input id="rid" placeholder="输入房间号" maxlength="20" autocomplete="off"></div>
   <button onclick="joinGame()">进入房间</button>
@@ -451,11 +451,11 @@ body{font-family:'Noto Sans SC','Segoe UI',sans-serif;background:var(--bg);color
 // ─── Constants ───────────────────────────────────────────────────────────────
 const SU=['C','D','H','S'];
 const SY={S:'♠',H:'♥',D:'♦',C:'♣'};
-const RANKS=['8','9','10','J','Q','K','A']; // index = rank order (low→high)
+const RANKS=['0','1','2','3','4','5','6','7','8','9','10','J','Q','K','A']; // index = rank order (low→high)
 const SE=['N','E','S','W'];
 const SN={N:'北',E:'东',S:'南',W:'西'};
-const BS=['C','D','H','S','NT'],LV=[1,2,3,4];
-const TN={1:4,2:5,3:6,4:7};
+const BS=['C','D','H','S','NT'],LV=[1,2,3,4,5,6,7];
+const TN={1:7,2:8,3:9,4:10,5:11,6:12,7:13};
 
 
 function connectToMqtt() {
@@ -822,8 +822,11 @@ function sNB(){
   S.dummyRevealed=false;
   const dk=[];
   for(let s of SU)for(let r of RANKS)dk.push({suit:s,rank:r});
+  // Shuffle all 60 cards
   for(let i=dk.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[dk[i],dk[j]]=[dk[j],dk[i]];}
-  S.hands={N:dk.slice(0,7),E:dk.slice(7,14),S:dk.slice(14,21),W:dk.slice(21,28)};
+  // Remove 8 random cards as "kitty" (no one sees them)
+  const playDk=dk.slice(8); // 52 cards remain
+  S.hands={N:playDk.slice(0,13),E:playDk.slice(13,26),S:playDk.slice(26,39),W:playDk.slice(39,52)};
   for(let s of SE)sortHand(S.hands[s]);
   S.allHands=JSON.parse(JSON.stringify(S.hands));
   rA();bS();
@@ -926,8 +929,8 @@ function pC(seat,card){
       S.trickLead=w;
       S.turnSeat=w;
       trickProcessing=false; // unlock
-      if(S.trickWins.NS+S.trickWins.EW===7)eP();
-      else if(isHost&&S.trickWins.NS+S.trickWins.EW===6){
+      if(S.trickWins.NS+S.trickWins.EW===13)eP();
+      else if(isHost&&S.trickWins.NS+S.trickWins.EW===12){
         rA();bS();
         autoPlayLastTrick();
       }
@@ -959,24 +962,93 @@ function eP(){
   const c=S.contract,ds=(SE.indexOf(c.declarer)%2===0)?'NS':'EW',dt=S.trickWins[ds];
   const nd=TN[c.level],made=dt-nd,score=cSc(c,made);
   rB(score,c,dt);rA();bS();
-  sS(fC(c),'庄家: '+SN[c.declarer]+' · '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' · '+dt+'/7墩',score);
+  sS(fC(c),'庄家: '+SN[c.declarer]+' · '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' · '+dt+'/13墩',score);
+}
+
+function isVul(side){
+  // Vulnerability based on board number (same as duplicate bridge rotation)
+  const b=((S.boardNum-1)%16)+1;
+  const vulTable={1:'none',2:'NS',3:'EW',4:'both',5:'NS',6:'EW',7:'both',8:'none',9:'EW',10:'both',11:'none',12:'NS',13:'both',14:'none',15:'NS',16:'EW'};
+  const v=vulTable[b]||'none';
+  if(v==='both')return true;
+  if(v==='none')return false;
+  return v===side;
 }
 
 function cSc(c,made){
   const{level:l,suit:s,doubled:d,redoubled:r}=c;
+  const decSide=(SE.indexOf(c.declarer)%2===0)?'NS':'EW';
+  const vul=isVul(decSide);
+
   if(made>=0){
-    let tp=s==='NT'?30+(l-1)*20:l*20;
-    let m=d?2:r?4:1;tp*=m;
-    let b=tp>=50?250:50;
-    if(l===4)b=750;
-    let e=d?100:r?200:0;
-    let o=made>0?(!d&&!r?made*20:d?made*100:made*200):0;
-    return tp+b+e+o;
+    // Trick score per trick bid
+    let trickPts;
+    if(s==='NT') trickPts=40+(l-1)*30; // 1NT=40, then 30 each
+    else if(s==='H'||s==='S') trickPts=l*30;
+    else trickPts=l*20; // C or D
+
+    let m=d?2:r?4:1;
+    trickPts*=m;
+
+    // Game/part-score bonus
+    let gameBonus=0;
+    const isGame=trickPts>=100;
+    if(isGame) gameBonus=vul?500:300;
+    else gameBonus=50; // part-score
+
+    // Small slam bonus (level 6)
+    let slamBonus=0;
+    if(l===6) slamBonus=vul?750:500;
+    // Grand slam bonus (level 7)
+    if(l===7) slamBonus=vul?1500:1000;
+
+    // Doubled/redoubled insult bonus
+    let insult=d?50:r?100:0;
+
+    // Overtrick score
+    let overPts=0;
+    if(made>0){
+      if(!d&&!r){
+        if(s==='NT'||s==='H'||s==='S') overPts=made*30;
+        else overPts=made*20;
+      } else if(d){
+        overPts=made*(vul?200:100);
+      } else {
+        overPts=made*(vul?400:200);
+      }
+    }
+
+    return trickPts+gameBonus+slamBonus+insult+overPts;
   }
+
+  // Undertricks
   const dn=-made;
-  if(!d&&!r)return-(dn*50);
-  if(d){let p=0;if(dn>=1)p+=100;if(dn>=2)p+=200;if(dn>=3)p+=200;for(let i=4;i<=dn;i++)p+=300;return-p;}
-  let p=0;if(dn>=1)p+=200;if(dn>=2)p+=400;if(dn>=3)p+=400;for(let i=4;i<=dn;i++)p+=600;return-p;
+  if(!d&&!r){
+    return vul?-(dn*100):-(dn*50);
+  }
+  if(d){
+    let p=0;
+    if(vul){
+      p=dn*200;
+    } else {
+      if(dn>=1)p+=100;
+      if(dn>=2)p+=200;
+      if(dn>=3)p+=200;
+      for(let i=4;i<=dn;i++)p+=300;
+    }
+    return -p;
+  }
+  // Redoubled
+  let p=0;
+  if(vul){
+    p=dn*400;
+  } else {
+    if(dn>=1)p+=200;
+    if(dn>=2)p+=400;
+    if(dn>=3)p+=400;
+    for(let i=4;i<=dn;i++)p+=600;
+  }
+  return -p;
 }
 
 function rB(sc2,ct,dt){
@@ -1074,7 +1146,7 @@ window.showClaimDialog = function() {
   const dialog = document.getElementById('claim-dialog');
   const input = document.getElementById('claim-tricks-input');
   const currentTricks = S.trickWins[(SE.indexOf(mySeat)%2===0)?'NS':'EW'];
-  const remaining = 7 - (S.trickWins.NS + S.trickWins.EW);
+  const remaining = 13 - (S.trickWins.NS + S.trickWins.EW);
   input.min = currentTricks;
   input.max = currentTricks + remaining;
   input.value = currentTricks + remaining; // 默认声称全拿
@@ -1090,7 +1162,7 @@ window.submitClaim = function() {
   const input = document.getElementById('claim-tricks-input');
   let tricks = parseInt(input.value, 10);
   const currentTricks = S.trickWins[(SE.indexOf(mySeat)%2===0)?'NS':'EW'];
-  const remaining = 7 - (S.trickWins.NS + S.trickWins.EW);
+  const remaining = 13 - (S.trickWins.NS + S.trickWins.EW);
   if (isNaN(tricks) || tricks < currentTricks || tricks > currentTricks + remaining) {
     alert('无效的墩数');
     return;
@@ -1168,7 +1240,7 @@ function applyClaimResult() {
   const score = cSc(c, made);
   rB(score, c, S.trickWins[side]);
   rA(); bS();
-  sS(fC(c), '庄家声称 · ' + (made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made)) + ' · ' + S.trickWins[side] + '/7墩', score);
+  sS(fC(c), '庄家声称 · ' + (made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made)) + ' · ' + S.trickWins[side] + '/13墩', score);
 }
 
 // 渲染防守方响应面板
@@ -1421,8 +1493,12 @@ function rCl(){
     const other=ds==='NS'?'EW':'NS';
     gi.style.display='block';
     const need=TN[S.contract.level];
+    const decSide=(SE.indexOf(S.contract.declarer)%2===0)?'NS':'EW';
+    const vulNS=isVul('NS'),vulEW=isVul('EW');
+    const vulStr=(vulNS&&vulEW)?'双方有局':(vulNS?'NS有局':(vulEW?'EW有局':'无局'));
     gi.innerHTML='<div class="contract">'+fC(S.contract)+'</div>'+
-      '<div class="tricks">'+ds+':'+S.trickWins[ds]+'/'+need+' '+other+':'+S.trickWins[other]+'</div>';
+      '<div class="tricks">'+ds+':'+S.trickWins[ds]+'/'+need+' '+other+':'+S.trickWins[other]+'</div>'+
+      '<div style="font-size:.8em;color:#f0c040">'+vulStr+'</div>';
   } else {
     gi.style.display='none';
   }
@@ -1471,7 +1547,8 @@ function bBG(){
   const g=document.getElementById('bidgrid');
   g.innerHTML='';
   const suitColors={C:'#2ecc71',D:'#e67e22',H:'#e74c3c',S:'#ccc',NT:'#aaa'};
-  for(let l of LV)for(let s of BS){
+  // Loop suits outer, levels inner → each row is one suit, each column is one level
+  for(let s of BS)for(let l of LV){
     const bid=l+s,btn=document.createElement('button');
     btn.className='bb';btn.dataset.bid=bid;
     btn.innerHTML=s==='NT'?'<span>'+l+'NT</span>':'<span>'+l+'</span><span style="color:'+suitColors[s]+'">'+SY[s]+'</span>';
@@ -1617,7 +1694,7 @@ function showScoreFromState(){
   const ds=(SE.indexOf(c.declarer)%2===0)?'NS':'EW';
   const dt=S.trickWins[ds];
   const nd=TN[c.level],made=dt-nd,score=cSc(c,made);
-  sS(fC(c),'庄家: '+SN[c.declarer]+' · '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' · '+dt+'/7墩',score);
+  sS(fC(c),'庄家: '+SN[c.declarer]+' · '+(made>=0?(made===0?'完成':'超'+made+'墩'):'宕'+(-made))+' · '+dt+'/13墩',score);
 }
 window.closeScore=function(){
   document.getElementById('spop').classList.remove('show');
